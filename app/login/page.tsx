@@ -1,7 +1,7 @@
-<<<<<<< HEAD
 "use client";
 
 import React, { useState } from "react";
+
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -16,14 +16,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-2xl flex rounded-2xl overflow-hidden shadow-lg border border-gray200">
+      <div className="w-full max-w-2xl flex rounded-2xl overflow-hidden shadow-lg border border-gray-200">
         
 
         {/* Right Panel — Form */}
         <div className="flex-1 bg-white px-8 py-10 flex flex-col justify-center">
           <div className="mb-8">
             <h1 className="text-2xl font-semibold text-gray-900 tracking-tight mb-1">
-              Sigin
+              Sign in
             </h1>
             <p className="text-sm text-gray-500">เข้าสู่ระบบเพื่อดำเนินการต่อ</p>
           </div>
@@ -170,14 +170,4 @@ function GitHubIcon() {
     </svg>
   );
 }
-=======
-import React from 'react'
 
-function page() {
-  return (
-    <div>page</div>
-  )
-}
-
-export default page
->>>>>>> a3197cfe7ce3ed84a9f0006a8d80b36f88c42fb2
