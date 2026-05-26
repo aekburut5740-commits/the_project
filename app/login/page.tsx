@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 "use client";
 
 import React, { useState } from "react";
@@ -169,3 +170,14 @@ function GitHubIcon() {
     </svg>
   );
 }
+=======
+import React from 'react'
+
+function page() {
+  return (
+    <div>page</div>
+  )
+}
+
+export default page
+>>>>>>> a3197cfe7ce3ed84a9f0006a8d80b36f88c42fb2
