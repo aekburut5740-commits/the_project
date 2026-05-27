@@ -1,1 +1,1 @@
-export { query, pool } from '../src/database/db'
+export { default as prisma } from '../src/lib/prisma'

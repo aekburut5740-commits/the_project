@@ -40,14 +40,24 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 This repository includes a small Elysia backend in the `backend/` folder and PostgreSQL helpers in `database/`.
 
 1. Copy `.env.example` to `.env` and fill in your database credentials.
-2. From the `my-app` folder run the backend separately:
+2. Install dependencies with Bun and generate Prisma client:
+
+```bash
+# install deps
+bun install
+
+# generate prisma client
+bun run prisma generate
+```
+
+3. From the `my-app` folder run the apps separately:
 
 ```bash
 # Start Next.js app
-npm run dev
+bun run dev
 
 # In another terminal: start backend
-npm run dev:backend
+bun run dev:backend
 ```
 
 The backend will perform a quick DB health-check on startup and log connection status.
@@ -56,5 +66,5 @@ Project layout (simplified):
 
 - `app/` — Next.js app routes and pages
 - `src/server/` — Elysia backend entry (`index.ts`)
-- `src/database/` — Postgres helper (`db.ts`)
+- `src/lib/prisma.ts` — Prisma client (backend DB access)
 - `backend/`, `database/` — small shims kept for backward compatibility

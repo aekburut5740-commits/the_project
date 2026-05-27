@@ -1,6 +1,6 @@
-import { query } from "./db"
+import prisma from '../src/lib/prisma'
 
 export async function GET() {
-  const result = await query('SELECT NOW()')
-  return Response.json(result.rows)
+  const result = await prisma.$queryRaw`SELECT NOW()`
+  return Response.json(result)
 }
