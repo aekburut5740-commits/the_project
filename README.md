@@ -34,3 +34,27 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Backend (Elysia) and Database
+
+This repository includes a small Elysia backend in the `backend/` folder and PostgreSQL helpers in `database/`.
+
+1. Copy `.env.example` to `.env` and fill in your database credentials.
+2. From the `my-app` folder run the backend separately:
+
+```bash
+# Start Next.js app
+npm run dev
+
+# In another terminal: start backend
+npm run dev:backend
+```
+
+The backend will perform a quick DB health-check on startup and log connection status.
+
+Project layout (simplified):
+
+- `app/` — Next.js app routes and pages
+- `src/server/` — Elysia backend entry (`index.ts`)
+- `src/database/` — Postgres helper (`db.ts`)
+- `backend/`, `database/` — small shims kept for backward compatibility
