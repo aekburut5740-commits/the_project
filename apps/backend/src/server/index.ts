@@ -1,11 +1,11 @@
 import { Elysia } from 'elysia'
-import prisma from '../lib/prisma'
-import { registerUserRoutes } from './routes/user.routes'
+import { db } from '../lib/db'
+import { userRoutes } from './routes/user.routes'
 
 async function start() {
   try {
-    await prisma.$queryRaw`SELECT 1`
-    console.log('Database (Prisma) connection OK')
+    await db.query('SELECT 1')
+    console.log('Database (pg) connection OK')
   } catch (err) {
     console.error('Database connection failed:', err)
   }
@@ -14,7 +14,7 @@ async function start() {
     .get('/', 'Hello Elysia')
     .post('/form', ({ body }) => body)
 
-  registerUserRoutes(app)
+  app.use(userRoutes)
   app.listen(3000)
 
   console.log('Elysia server starting on port 3000')
