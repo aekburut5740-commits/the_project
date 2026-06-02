@@ -1,9 +1,17 @@
+import { Pool } from 'pg'
 import { Elysia } from 'elysia'
-import prisma from '../../lib/prisma'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+})
 
 export function registerUserRoutes(app: Elysia) {
   app.get('/api/users/:id', async ({ params: { id } }) => {
-    const user = await prisma.user.findUnique({ where: { id: Number(id) } as any })
-    return user || null
+    const result = await pool.query(
+      'SELECT * FROM users WHERE id = $1',
+      [id]
+    )
+
+    return result.rows[0] || null
   })
 }
