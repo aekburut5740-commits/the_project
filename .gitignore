@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+bun.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Next.js
+.next/
+out/
+.env
+.env.local
+.env.*.local
+
+# Backend
+dist/
+
+# OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database
+*.sql.backup
+*.sql.gz
+
+# Secrets
+.env.production.local
+.env.*.local

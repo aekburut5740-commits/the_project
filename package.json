@@ -1,0 +1,10 @@
+{
+  "name": "nexus-client-portal",
+  "version": "1.0.0",
+  "description": "Client Portal for Project Management & Tracking",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/backend"
+  ]
+}
