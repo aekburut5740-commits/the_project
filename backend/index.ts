@@ -1,5 +1,6 @@
+
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken } from "../database/route"
 import { cors } from "@elysiajs/cors"
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers } from "../database/route"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
 import type { JwtPayload } from "jsonwebtoken"
@@ -101,6 +102,37 @@ new Elysia()
       return { message: "ไม่มีสิทธิ์เข้าถึง" }
     }
     return getAllUsers()
+  })
+
+  // Customer: อัปเดตโปรเจคของตัวเอง
+  .put("/api/projects/:id", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { name, description } = body as any
+    try {
+      return await updateProject(Number(params.id), name, description, result.id)
+    } catch (err: any) {
+      set.status = 403
+      return { message: err.message }
+    }
+  })
+
+  // Admin: ลบโปรเจค
+  .delete("/api/admin/projects/:id", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return deleteProject(Number(params.id))
+  })
+
+  // Refresh Token
+  .post("/api/refresh", ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return refreshToken(result.id)
   })
 
   .listen(4000)

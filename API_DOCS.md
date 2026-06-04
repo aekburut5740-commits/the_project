@@ -55,3 +55,19 @@ Response: { "id", "name", "description", "status", "user_id", "created_at" }
 GET /api/admin/users
 Headers: Authorization: Bearer <token>
 Response: [{ "id", "username", "role", "created_at" }]
+
+### อัปเดตโปรเจคของตัวเอง (Customer)
+PUT /api/projects/:id
+Headers: Authorization: Bearer <token>
+Body: { "name": "string", "description": "string" }
+Response: { "id", "name", "description", "status", "user_id", "created_at" }
+
+### ลบโปรเจค (Admin)
+DELETE /api/admin/projects/:id
+Headers: Authorization: Bearer <token>
+Response: { "id", "name", "description", "status", "user_id", "created_at" }
+
+### Refresh Token
+POST /api/refresh
+Headers: Authorization: Bearer <token>
+Response: { "token": "JWT_TOKEN_ใหม่" }

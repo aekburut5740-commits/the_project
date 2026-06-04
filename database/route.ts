@@ -85,3 +85,48 @@ export async function getAllUsers() {
   )
   return result.rows
 }
+// Customer: อัปเดตข้อมูลโปรเจคของตัวเอง
+export async function updateProject(
+  id: number,
+  name: string,
+  description: string,
+  user_id: number
+) {
+  const result = await db.query(
+    `UPDATE projects 
+     SET name = $1, description = $2 
+     WHERE id = $3 AND user_id = $4 
+     RETURNING *`,
+    [name, description, id, user_id]
+  )
+  if (!result.rows.length) {
+    throw new Error("ไม่พบโปรเจคหรือไม่มีสิทธิ์แก้ไข")
+  }
+  return result.rows[0]
+}
+
+// Admin: ลบโปรเจค
+export async function deleteProject(id: number) {
+  const result = await db.query(
+    "DELETE FROM projects WHERE id = $1 RETURNING *",
+    [id]
+  )
+  return result.rows[0]
+}
+// Refresh Token
+export async function refreshToken(user_id: number) {
+  const result = await db.query(
+    "SELECT id, username, role FROM users WHERE id = $1",
+    [user_id]
+  )
+  if (!result.rows.length) {
+    throw new Error("ไม่พบ user")
+  }
+  const user = result.rows[0]
+  const token = jwt.sign(
+    { id: user.id, username: user.username, role: user.role },
+    process.env.JWT_SECRET || "mysecretkey123",
+    { expiresIn: "1d" }
+  )
+  return { token }
+}
