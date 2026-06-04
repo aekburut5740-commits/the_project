@@ -1,23 +1,25 @@
+import { cors } from "@elysiajs/cors"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers } from "../database/route"
 import { Elysia } from "elysia"
-import { register, login } from "../database/route"
 import jwt from "jsonwebtoken"
+import type { JwtPayload } from "jsonwebtoken"
 
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
 
-// Middleware ตรวจสอบ Token
 const authCheck = ({ headers, set }: any) => {
   const authHeader = headers["authorization"]
-  
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     set.status = 401
     return { message: "กรุณาเข้าสู่ระบบก่อน" }
   }
-  
   const token = authHeader.split(" ")[1]
-  
   try {
     const decoded = jwt.verify(token, JWT_SECRET)
-    return decoded
+    if (!decoded || typeof decoded === "string" || !("id" in decoded)) {
+      set.status = 401
+      return { message: "Token ไม่ถูกต้องหรือหมดอายุ" }
+    }
+    return decoded as JwtPayload
   } catch (err) {
     set.status = 401
     return { message: "Token ไม่ถูกต้องหรือหมดอายุ" }
@@ -25,37 +27,80 @@ const authCheck = ({ headers, set }: any) => {
 }
 
 new Elysia()
+  .use(cors())
   .get("/", () => "Server is running!")
 
-  // สมัครสมาชิก (ไม่ต้องมี Token)
   .post("/api/register", async ({ body }) => {
-    const { email, password } = body as any
+    const { username, password, role } = body as any
     try {
-      const user = await register(email, password)
+     const user = await register(username, password, role)
       return { message: "สมัครสมาชิกสำเร็จ", user }
     } catch (err: any) {
-    
       return { message: err.message }
     }
   })
 
-  // เข้าสู่ระบบ (ไม่ต้องมี Token)
   .post("/api/login", async ({ body }) => {
-    const { email, password } = body as any
+    const { username, password } = body as any
     try {
-      const result = await login(email, password)
+      const result = await login(username, password)
       return result
     } catch (err: any) {
       return { message: err.message }
     }
   })
 
-  // ตัวอย่าง Route ที่ต้องมี Token ถึงจะเข้าได้
   .get("/api/profile", ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-    
     return { message: "ยินดีต้อนรับ!", user: result }
+  })
+
+  .get("/api/projects", ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getProjects(result.id)
+  })
+
+  .post("/api/projects", async ({ headers, set, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { name, description } = body as any
+    return createProject(name, description, result.id)
+  })
+
+  // Admin: ดูทุก project (ต้องเป็น admin)
+  .get("/api/admin/projects", ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return getAllProjects()
+  })
+
+  // Admin: อัปเดตสถานะโปรเจค
+  .put("/api/admin/projects/:id", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { status } = body as any
+    return updateProjectStatus(Number(params.id), status)
+  })
+
+  // Admin: ดู users ทั้งหมด
+  .get("/api/admin/users", ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return getAllUsers()
   })
 
   .listen(4000)
