@@ -2,7 +2,7 @@ import React from 'react'
 
 function dashboard() {
   return (
-    <div>Dashboard</div>
+    <h1 className="text-4xl font-bold text-center text-black mt-8">Dashboard</h1>
   )
 }
 
