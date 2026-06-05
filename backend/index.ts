@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken } from "../database/route"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -135,6 +135,53 @@ new Elysia()
     return refreshToken(result.id)
   })
 
+
+  // Customer: Dashboard ของตัวเอง
+  .get("/api/dashboard", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getDashboardSummary(result.id)
+  })
+
+  // Customer/Admin: ดู health โปรเจคเดียว
+  .get("/api/projects/:id/health", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    try {
+      return await getProjectHealth(Number(params.id), result.id, result.role)
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
+
+  // Admin: Dashboard ภาพรวมทุก user
+  .get("/api/admin/dashboard", ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return getAdminDashboard()
+  })
+
+  // Admin: อัปเดต progress โปรเจค
+  .put("/api/admin/projects/:id/progress", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { progress } = body as any
+    try {
+      return await updateProjectProgress(Number(params.id), Number(progress))
+    } catch (err: any) {
+      set.status = 400
+      return { message: err.message }
+    }
+  })
   .listen(4000)
 
 console.log("Server running on port 4000")

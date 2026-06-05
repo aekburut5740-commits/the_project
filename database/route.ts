@@ -130,3 +130,89 @@ export async function refreshToken(user_id: number) {
   )
   return { token }
 }
+// ===== DASHBOARD =====
+
+// Customer: ดู dashboard ของตัวเอง
+export async function getDashboardSummary(user_id: number) {
+  const result = await db.query(
+    `SELECT id, name, description, status, progress, created_at
+     FROM projects 
+     WHERE user_id = $1 
+     ORDER BY created_at DESC`,
+    [user_id]
+  )
+  const projects = result.rows
+
+  return {
+    total: projects.length,
+    summary: {
+      on_track:         projects.filter(p => p.status === 'on_track').length,
+      in_review:        projects.filter(p => p.status === 'in_review').length,
+      completed:        projects.filter(p => p.status === 'completed').length,
+      delayed:          projects.filter(p => p.status === 'delayed').length,
+    },
+    projects
+  }
+}
+
+// Customer/Admin: ดู health โปรเจคเดียว (progress bar)
+export async function getProjectHealth(project_id: number, user_id: number, role: string) {
+  let result
+
+  if (role === 'admin') {
+    result = await db.query(
+      `SELECT p.*, u.username FROM projects p 
+       JOIN users u ON p.user_id = u.id 
+       WHERE p.id = $1`,
+      [project_id]
+    )
+  } else {
+    result = await db.query(
+      `SELECT * FROM projects WHERE id = $1 AND user_id = $2`,
+      [project_id, user_id]
+    )
+  }
+
+  if (!result.rows.length) throw new Error("ไม่พบโปรเจค")
+  return result.rows[0]
+}
+
+// Admin: อัปเดต progress (0-100)
+export async function updateProjectProgress(id: number, progress: number) {
+  if (progress < 0 || progress > 100) throw new Error("Progress ต้องอยู่ระหว่าง 0-100")
+
+  const result = await db.query(
+    `UPDATE projects 
+     SET progress = $1,
+         status = CASE WHEN $1 = 100 THEN 'completed' ELSE status END
+     WHERE id = $2 RETURNING *`,
+    [progress, id]
+  )
+
+  if (!result.rows.length) throw new Error("ไม่พบโปรเจค")
+  return result.rows[0]
+}
+
+// Admin: Dashboard ภาพรวมทุก user
+export async function getAdminDashboard() {
+  const projectsResult = await db.query(
+    `SELECT p.id, p.name, p.status, p.progress, p.created_at, u.username
+     FROM projects p 
+     JOIN users u ON p.user_id = u.id
+     ORDER BY p.created_at DESC`
+  )
+  const usersResult = await db.query("SELECT COUNT(*) FROM users")
+  const projects = projectsResult.rows
+
+  return {
+    total_users:    Number(usersResult.rows[0].count),
+    total_projects: projects.length,
+    summary: {
+      on_track:  projects.filter(p => p.status === 'on_track').length,
+      in_review: projects.filter(p => p.status === 'in_review').length,
+      completed: projects.filter(p => p.status === 'completed').length,
+      delayed:   projects.filter(p => p.status === 'delayed').length,
+    },
+    projects
+  }
+}

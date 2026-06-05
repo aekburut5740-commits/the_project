@@ -14,6 +14,7 @@
     "elysia": "^1.4.28",
     "elysiajs": "^0.0.0",
     "jsonwebtoken": "^9.0.3",
+    "jwt-decode": "^4.0.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.6",
     "pg": "^8.21.0",
