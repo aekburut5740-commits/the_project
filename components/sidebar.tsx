@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRef, useState } from "react";
 import {
   LayoutDashboard, FolderKanban, Flag, Bell,
   MessageSquare, FileText, GitBranch, BarChart2,
-  Settings, LogOut
+  Settings, LogOut, Pencil, Check, X, Camera
 } from "lucide-react";
 
 const navItems = [
@@ -22,6 +23,39 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
 
+  // Profile state
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [username, setUsername] = useState("N");
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState(username);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setAvatar(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function confirmName() {
+    if (tempName.trim()) setUsername(tempName.trim());
+    setEditingName(false);
+  }
+
+  function cancelName() {
+    setTempName(username);
+    setEditingName(false);
+  }
+
+  // Initials fallback
+  const initials = username
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
   return (
     <aside className="w-56 bg-black text-white flex flex-col h-full">
       {/* Nav */}
@@ -32,10 +66,11 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${active
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                active
                   ? "bg-blue-600 text-white"
                   : "text-gray-400 hover:bg-white/10 hover:text-white"
-                }`}
+              }`}
             >
               <Icon size={17} />
               <span>{label}</span>
@@ -60,6 +95,82 @@ export default function Sidebar() {
           <LogOut size={17} />
           <span>Logout</span>
         </Link>
+
+        {/* Divider */}
+        <div className="border-t border-white/10 my-2" />
+
+        {/* Profile */}
+        <div className="px-1 pt-1 pb-0.5">
+          <div className="flex items-center gap-3">
+
+            {/* Avatar */}
+            <div className="relative flex-shrink-0 group">
+              <div className="w-9 h-9 rounded-full overflow-hidden bg-blue-600/30 border border-white/10 flex items-center justify-center text-sm font-bold text-blue-400">
+                {avatar ? (
+                  <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                  initials
+                )}
+              </div>
+              {/* Camera overlay */}
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                <Camera size={13} className="text-white" />
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
+
+            {/* Name */}
+            <div className="flex-1 min-w-0">
+              {editingName ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={tempName}
+                    onChange={(e) => setTempName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") confirmName();
+                      if (e.key === "Escape") cancelName();
+                    }}
+                    className="w-full bg-white/10 text-white text-sm rounded px-2 py-0.5 outline-none border border-blue-500/60 min-w-0"
+                  />
+                  <button onClick={confirmName} className="text-green-400 hover:text-green-300 flex-shrink-0">
+                    <Check size={13} />
+                  </button>
+                  <button onClick={cancelName} className="text-gray-500 hover:text-gray-300 flex-shrink-0">
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 group/name">
+                  <span className="text-sm text-white font-medium truncate">
+                    {username}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setTempName(username);
+                      setEditingName(true);
+                    }}
+                    className="text-gray-600 hover:text-gray-300 opacity-0 group-hover/name:opacity-100 transition-opacity flex-shrink-0"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                </div>
+              )}
+              {/* TODO: เปลี่ยนเป็น role จาก useRole() */}
+              <span className="text-xs text-gray-500">admin</span>
+            </div>
+
+          </div>
+        </div>
       </div>
     </aside>
   );
