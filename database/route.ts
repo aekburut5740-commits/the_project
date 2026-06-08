@@ -259,3 +259,46 @@ export async function markAllAsRead(user_id: number) {
   )
   return { message: "อ่านทั้งหมดแล้ว" }
 }
+
+// ===== COMMENTS =====
+
+// ดู comment ทั้งหมดในโปรเจค
+export async function getComments(project_id: number) {
+  const result = await db.query(
+    `SELECT comments.*, users.username 
+     FROM comments 
+     JOIN users ON comments.user_id = users.id
+     WHERE comments.project_id = $1 
+     ORDER BY comments.created_at ASC`,
+    [project_id]
+  )
+  return result.rows
+}
+
+// เพิ่ม comment
+export async function createComment(project_id: number, user_id: number, content: string) {
+  const result = await db.query(
+    `INSERT INTO comments (project_id, user_id, content) 
+     VALUES ($1, $2, $3) RETURNING *`,
+    [project_id, user_id, content]
+  )
+  return result.rows[0]
+}
+
+// ลบ comment (เฉพาะเจ้าของหรือ Admin)
+export async function deleteComment(comment_id: number, user_id: number, role: string) {
+  let result
+  if (role === 'admin') {
+    result = await db.query(
+      `DELETE FROM comments WHERE id = $1 RETURNING *`,
+      [comment_id]
+    )
+  } else {
+    result = await db.query(
+      `DELETE FROM comments WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [comment_id, user_id]
+    )
+  }
+  if (!result.rows.length) throw new Error("ไม่พบ comment หรือไม่มีสิทธิ์ลบ")
+  return result.rows[0]
+}
