@@ -216,3 +216,46 @@ export async function getAdminDashboard() {
     projects
   }
 }
+// ===== NOTIFICATIONS =====
+
+// สร้าง notification (ใช้ภายในระบบ ไม่ใช่ API)
+export async function createNotification(user_id: number, project_id: number, message: string) {
+  await db.query(
+    `INSERT INTO notifications (user_id, project_id, message) 
+     VALUES ($1, $2, $3)`,
+    [user_id, project_id, message]
+  )
+}
+
+// Customer: ดูการแจ้งเตือนของตัวเอง
+export async function getNotifications(user_id: number) {
+  const result = await db.query(
+    `SELECT * FROM notifications 
+     WHERE user_id = $1 
+     ORDER BY created_at DESC`,
+    [user_id]
+  )
+  return result.rows
+}
+
+// Customer: กดอ่านแล้ว (ทีละอัน)
+export async function markAsRead(notification_id: number, user_id: number) {
+  const result = await db.query(
+    `UPDATE notifications 
+     SET is_read = TRUE 
+     WHERE id = $1 AND user_id = $2 
+     RETURNING *`,
+    [notification_id, user_id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบการแจ้งเตือน")
+  return result.rows[0]
+}
+
+// Customer: กดอ่านทั้งหมด
+export async function markAllAsRead(user_id: number) {
+  await db.query(
+    `UPDATE notifications SET is_read = TRUE WHERE user_id = $1`,
+    [user_id]
+  )
+  return { message: "อ่านทั้งหมดแล้ว" }
+}
