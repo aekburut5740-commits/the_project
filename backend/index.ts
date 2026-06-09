@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead } from "../database/route"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -216,6 +216,38 @@ new Elysia()
     if (set.status === 401) return result
     return markAllAsRead(result.id)
   })
+
+ // ดู comment ทั้งหมดในโปรเจค
+  .get("/api/projects/:id/comments", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getComments(Number(params.id))
+  })
+
+  // เพิ่ม comment
+  .post("/api/projects/:id/comments", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { content } = body as any
+    if (!content) {
+      set.status = 400
+      return { message: "กรุณาใส่ข้อความ" }
+    }
+    return createComment(Number(params.id), result.id, content)
+  })
+
+  // ลบ comment
+  .delete("/api/comments/:commentId", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    try {
+      return await deleteComment(Number(params.commentId), result.id, result.role)
+    } catch (err: any) {
+      set.status = 403
+      return { message: err.message }
+    }
+  })
+
   .listen(4000)
 
 console.log("Server running on port 4000")
