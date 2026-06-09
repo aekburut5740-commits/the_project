@@ -6,10 +6,12 @@ import {
   MOCK_CURRENT_USER, MOCK_PROJECTS, MOCK_MILESTONES, MILESTONE_STATUS_CONFIG,
   type Milestone, type MilestoneStatus,
 } from "@/lib/mockData"
+import { useNotifications } from "@/lib/notificationStore"
 
 export default function MilestonesPage() {
   const user = MOCK_CURRENT_USER
   const isAdmin = user.role === "admin"
+  const { addNotif } = useNotifications()
 
   const myProjectIds = useMemo(() =>
     isAdmin ? MOCK_PROJECTS.map((p) => p.id)
@@ -33,12 +35,47 @@ export default function MilestonesPage() {
     overdue: milestones.filter((m) => m.status === "overdue").length,
   }
 
+  function getProjectOwnerId(projectId: number): number {
+    return MOCK_PROJECTS.find((p) => p.id === projectId)?.ownerId ?? 0
+  }
+
   function handleSave(updated: Milestone) {
+    const ownerId = getProjectOwnerId(updated.projectId)
+    const proj = MOCK_PROJECTS.find((p) => p.id === updated.projectId)
+
     if (isCreating) {
       setMilestones((prev) => [...prev, { ...updated, id: Date.now() }])
-      setIsCreating(false)
+      addNotif({
+        type: "milestone",
+        title: "Milestone ใหม่ถูกสร้าง",
+        message: `Admin เพิ่ม milestone "${updated.title}" ใน ${proj?.name}`,
+        forUserId: ownerId,
+      })
     } else {
-      setMilestones((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+      const old = milestones.find((m) => m.id === updated.id)
+      setMilestones((prev) => prev.map((m) => m.id === updated.id ? updated : m))
+      addNotif({
+        type: "milestone",
+        title: "Milestone อัปเดตแล้ว",
+        message: `"${updated.title}" ใน ${proj?.name}${old?.status !== updated.status ? ` → ${MILESTONE_STATUS_CONFIG[updated.status].label}` : " ถูกแก้ไข"}`,
+        forUserId: ownerId,
+      })
+    }
+    setEditingMilestone(null)
+    setIsCreating(false)
+  }
+
+  function handleDelete(id: number) {
+    const m = milestones.find((x) => x.id === id)
+    const ownerId = m ? getProjectOwnerId(m.projectId) : 0
+    setMilestones((prev) => prev.filter((x) => x.id !== id))
+    if (m) {
+      addNotif({
+        type: "milestone",
+        title: "Milestone ถูกลบ",
+        message: `Admin ลบ milestone "${m.title}" แล้ว`,
+        forUserId: ownerId,
+      })
     }
     setEditingMilestone(null)
   }
@@ -56,36 +93,23 @@ export default function MilestonesPage() {
       <div style={S.header}>
         <div>
           <h1 style={S.title}>Milestones</h1>
-          <p style={S.subtitle}>
-            {isAdmin ? `${stats.total} milestones ทั้งหมด` : `${stats.total} milestones ของโปรเจคคุณ`}
-          </p>
+          <p style={S.subtitle}>{isAdmin ? `${stats.total} milestones ทั้งหมด` : `${stats.total} milestones ของโปรเจคคุณ`}</p>
         </div>
-        {isAdmin && (
-          <button onClick={openCreate} style={S.addBtn}>
-            <Plus size={15} /> เพิ่ม Milestone
-          </button>
-        )}
+        {isAdmin && <button onClick={openCreate} style={S.addBtn}><Plus size={15} /> เพิ่ม Milestone</button>}
       </div>
 
-      {/* Role badge */}
       <div style={{ marginBottom: 20 }}>
-        <span style={{
-          ...S.roleBadge,
-          background: isAdmin ? "#4f8ef722" : "#34d39922",
-          color: isAdmin ? "#4f8ef7" : "#34d399",
-          border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}`,
-        }}>
+        <span style={{ ...S.roleBadge, background: isAdmin ? "#4f8ef722" : "#34d39922", color: isAdmin ? "#4f8ef7" : "#34d399", border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}` }}>
           {isAdmin ? "👑 Admin — เห็นและแก้ไขได้ทุก milestone" : "👤 Customer — เห็นเฉพาะ milestone ของโปรเจคคุณ"}
         </span>
       </div>
 
-      {/* Stats */}
       <div style={S.statsRow}>
         {[
-          { label: "ทั้งหมด",          value: stats.total,       color: "#6b7280" },
-          { label: "กำลังดำเนินการ",   value: stats.in_progress, color: "#4f8ef7" },
-          { label: "เสร็จแล้ว",        value: stats.completed,   color: "#34d399" },
-          { label: "เลยกำหนด",         value: stats.overdue,     color: "#f87171" },
+          { label: "ทั้งหมด", value: stats.total, color: "#6b7280" },
+          { label: "กำลังดำเนินการ", value: stats.in_progress, color: "#4f8ef7" },
+          { label: "เสร็จแล้ว", value: stats.completed, color: "#34d399" },
+          { label: "เลยกำหนด", value: stats.overdue, color: "#f87171" },
         ].map((s) => (
           <div key={s.label} style={{ ...S.statCard, borderTopColor: s.color }}>
             <div style={{ fontSize: 26, fontWeight: 700, color: "#f9fafb", fontFamily: "monospace" }}>{s.value}</div>
@@ -94,7 +118,6 @@ export default function MilestonesPage() {
         ))}
       </div>
 
-      {/* Filter */}
       <div style={S.tabGroup}>
         {(["all", "upcoming", "in_progress", "completed", "overdue"] as const).map((s) => (
           <button key={s} onClick={() => setFilterStatus(s)}
@@ -104,10 +127,7 @@ export default function MilestonesPage() {
         ))}
       </div>
 
-      {/* List */}
-      {filtered.length === 0 ? (
-        <div style={S.empty}>ไม่พบ milestone</div>
-      ) : (
+      {filtered.length === 0 ? <div style={S.empty}>ไม่พบ milestone</div> : (
         <div style={S.list}>
           {filtered.map((m) => (
             <MilestoneCard key={m.id} milestone={m} isAdmin={isAdmin}
@@ -117,27 +137,19 @@ export default function MilestonesPage() {
       )}
 
       {editingMilestone && isAdmin && (
-        <EditModal
-          milestone={editingMilestone}
-          isCreating={isCreating}
-          projectIds={myProjectIds}
+        <EditModal milestone={editingMilestone} isCreating={isCreating} projectIds={myProjectIds}
           onClose={() => { setEditingMilestone(null); setIsCreating(false) }}
-          onSave={handleSave}
-          onDelete={(id) => { setMilestones((prev) => prev.filter((m) => m.id !== id)); setEditingMilestone(null) }}
-        />
+          onSave={handleSave} onDelete={handleDelete} />
       )}
     </div>
   )
 }
 
-function MilestoneCard({ milestone: m, isAdmin, onEdit }: {
-  milestone: Milestone; isAdmin: boolean; onEdit: () => void
-}) {
+function MilestoneCard({ milestone: m, isAdmin, onEdit }: { milestone: Milestone; isAdmin: boolean; onEdit: () => void }) {
   const { color, label } = MILESTONE_STATUS_CONFIG[m.status]
   const project = MOCK_PROJECTS.find((p) => p.id === m.projectId)
   const doneTasks = m.tasks.filter((t) => t.done).length
   const StatusIcon = m.status === "completed" ? Check : m.status === "overdue" ? AlertCircle : m.status === "in_progress" ? ChevronRight : Clock
-
   return (
     <div style={S.card}>
       <div style={{ ...S.cardAccent, background: color }} />
@@ -163,9 +175,7 @@ function MilestoneCard({ milestone: m, isAdmin, onEdit }: {
             <span style={{ color: "#6b7280" }}>Tasks: {doneTasks}/{m.tasks.length}</span>
             <span style={{ color: "#f9fafb", fontWeight: 700, fontFamily: "monospace" }}>{m.progress}%</span>
           </div>
-          <div style={S.progressTrack}>
-            <div style={{ ...S.progressFill, width: `${m.progress}%`, background: color }} />
-          </div>
+          <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${m.progress}%`, background: color }} /></div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Calendar size={12} color="#4b5563" />
@@ -190,7 +200,6 @@ function EditModal({ milestone, isCreating, projectIds, onClose, onSave, onDelet
     set("tasks", [...form.tasks, { id: Date.now(), title: newTask.trim(), done: false }])
     setNewTask("")
   }
-
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={(e) => e.stopPropagation()}>
@@ -212,9 +221,7 @@ function EditModal({ milestone, isCreating, projectIds, onClose, onSave, onDelet
               })}
             </select>
           </Field>
-          <Field label="คำอธิบาย">
-            <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} style={{ ...S.input, resize: "vertical" }} />
-          </Field>
+          <Field label="คำอธิบาย"><textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} style={{ ...S.input, resize: "vertical" }} /></Field>
           <SLabel label="สถานะและเวลา" />
           <Field label="สถานะ">
             <select value={form.status} onChange={(e) => set("status", e.target.value as MilestoneStatus)} style={S.input}>
@@ -226,31 +233,23 @@ function EditModal({ milestone, isCreating, projectIds, onClose, onSave, onDelet
           </Field>
           <Field label="วันกำหนดส่ง"><Input type="date" value={form.dueDate} onChange={(v) => set("dueDate", v)} /></Field>
           <Field label={`ความคืบหน้า (${form.progress}%)`}>
-            <input type="range" min={0} max={100} value={form.progress}
-              onChange={(e) => set("progress", Number(e.target.value))}
-              style={{ width: "100%", accentColor: "#4f8ef7" }} />
+            <input type="range" min={0} max={100} value={form.progress} onChange={(e) => set("progress", Number(e.target.value))} style={{ width: "100%", accentColor: "#4f8ef7" }} />
           </Field>
           <SLabel label="Tasks" />
           <div style={{ display: "flex", gap: 8 }}>
-            <input value={newTask} onChange={(e) => setNewTask(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTask()}
-              placeholder="เพิ่ม task..." style={{ ...S.input, flex: 1 }} />
+            <input value={newTask} onChange={(e) => setNewTask(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="เพิ่ม task..." style={{ ...S.input, flex: 1 }} />
             <button onClick={addTask} style={S.addTaskBtn}>+</button>
           </div>
           {form.tasks.map((t) => (
             <div key={t.id} style={S.taskRow}>
-              <input type="checkbox" checked={t.done}
-                onChange={() => set("tasks", form.tasks.map((x) => x.id === t.id ? { ...x, done: !x.done } : x))}
-                style={{ accentColor: "#4f8ef7", cursor: "pointer" }} />
+              <input type="checkbox" checked={t.done} onChange={() => set("tasks", form.tasks.map((x) => x.id === t.id ? { ...x, done: !x.done } : x))} style={{ accentColor: "#4f8ef7", cursor: "pointer" }} />
               <span style={{ flex: 1, fontSize: 13, color: t.done ? "#4b5563" : "#d1d5db", textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
               <button onClick={() => set("tasks", form.tasks.filter((x) => x.id !== t.id))} style={S.removeTaskBtn}>✕</button>
             </div>
           ))}
         </div>
         <div style={{ ...S.modalFooter, justifyContent: isCreating ? "flex-end" : "space-between" }}>
-          {!isCreating && (
-            <button onClick={() => { if (confirm("ลบ milestone นี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบ</button>
-          )}
+          {!isCreating && <button onClick={() => { if (confirm("ลบ milestone นี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบ</button>}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={onClose} style={S.cancelBtn}>ยกเลิก</button>
             <button onClick={() => onSave(form)} style={S.saveBtn}>บันทึก</button>
@@ -261,15 +260,9 @@ function EditModal({ milestone, isCreating, projectIds, onClose, onSave, onDelet
   )
 }
 
-function SLabel({ label }: { label: string }) {
-  return <div style={{ fontSize: 11, fontWeight: 700, color: "#4f8ef7", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginTop: 4 }}>{label}</div>
-}
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{label}</label>{children}</div>
-}
-function Input({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
-  return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={S.input} />
-}
+function SLabel({ label }: { label: string }) { return <div style={{ fontSize: 11, fontWeight: 700, color: "#4f8ef7", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginTop: 4 }}>{label}</div> }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{label}</label>{children}</div> }
+function Input({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) { return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={S.input} /> }
 
 const S: Record<string, React.CSSProperties> = {
   page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },

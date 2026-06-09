@@ -6,6 +6,7 @@ import {
   MOCK_CURRENT_USER, MOCK_PROJECTS, MOCK_DOCUMENTS, CATEGORY_CONFIG,
   type Document, type DocCategory,
 } from "@/lib/mockData"
+import { useNotifications } from "@/lib/notificationStore"
 
 export default function DocumentVaultPage() {
   const user = MOCK_CURRENT_USER
@@ -23,6 +24,7 @@ export default function DocumentVaultPage() {
     return isAdmin ? visible : visible.filter((d) => !d.isConfidential)
   }, [isAdmin, myProjectIds])
 
+  const { addNotif } = useNotifications()
   const [docs, setDocs] = useState<Document[]>(baseDocs)
   const [search, setSearch] = useState("")
   const [filterProject, setFilterProject] = useState<number | "all">("all")
@@ -48,6 +50,13 @@ export default function DocumentVaultPage() {
 
   function handleUpload(newDoc: Omit<Document, "id">) {
     setDocs((prev) => [...prev, { ...newDoc, id: Date.now() }])
+    const proj = MOCK_PROJECTS.find((p) => p.id === newDoc.projectId)
+    addNotif({
+      type: "document",
+      title: "อัปโหลดเอกสารใหม่",
+      message: `Admin อัปโหลด ${newDoc.name} ใน ${proj?.name}`,
+      forUserId: proj?.ownerId ?? "all",
+    })
     setShowUpload(false)
   }
 
@@ -121,7 +130,18 @@ export default function DocumentVaultPage() {
                 {items.map((doc) => (
                   <DocCard key={doc.id} doc={doc} isAdmin={isAdmin}
                     onPreview={() => setPreviewDoc(doc)}
-                    onDelete={() => { if (confirm("ลบเอกสารนี้?")) setDocs((prev) => prev.filter((d) => d.id !== doc.id)) }} />
+                    onDelete={() => {
+                      if (confirm("ลบเอกสารนี้?")) {
+                        const proj = MOCK_PROJECTS.find((p) => p.id === doc.projectId)
+                        setDocs((prev) => prev.filter((d) => d.id !== doc.id))
+                        addNotif({
+                          type: "document",
+                          title: "เอกสารถูกลบ",
+                          message: `Admin ลบ ${doc.name} ออกจาก ${proj?.name}`,
+                          forUserId: proj?.ownerId ?? "all",
+                        })
+                      }
+                    }} />
                 ))}
               </div>
             </div>
