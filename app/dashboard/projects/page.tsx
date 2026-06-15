@@ -5,14 +5,15 @@ import {
   MOCK_CURRENT_USER, MOCK_PROJECTS, STATUS_CONFIG,
   type Project, type ProjectStatus,
 } from "@/lib/mockData"
+import { useNotifications } from "@/lib/notificationStore"
 
 const PACKAGES = ["Starter", "Professional", "Enterprise"]
 
 export default function ProjectsPage() {
   const user = MOCK_CURRENT_USER
   const isAdmin = user.role === "admin"
+  const { addNotif } = useNotifications()
 
-  // Filter by role
   const baseProjects = useMemo(() =>
     isAdmin ? MOCK_PROJECTS : MOCK_PROJECTS.filter((p) => p.ownerId === user.id),
     [isAdmin, user.id]
@@ -34,9 +35,45 @@ export default function ProjectsPage() {
   function handleSave(updated: Project) {
     if (isCreating) {
       setProjects((prev) => [...prev, { ...updated, id: Date.now() }])
-      setIsCreating(false)
+      addNotif({
+        type: "project",
+        title: "โปรเจคใหม่ถูกสร้าง",
+        message: `Admin สร้างโปรเจค "${updated.name}" แล้ว`,
+        forUserId: "all",
+      })
     } else {
-      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      const old = projects.find((p) => p.id === updated.id)
+      setProjects((prev) => prev.map((p) => p.id === updated.id ? updated : p))
+
+      // แจ้ง customer เจ้าของโปรเจค
+      addNotif({
+        type: "project",
+        title: "โปรเจคของคุณถูกอัปเดต",
+        message: `Admin แก้ไขโปรเจค "${updated.name}"${old?.status !== updated.status ? ` → สถานะเปลี่ยนเป็น "${STATUS_CONFIG[updated.status].label}"` : ""}`,
+        forUserId: updated.ownerId,
+      })
+      // แจ้ง admin ด้วย
+      addNotif({
+        type: "project",
+        title: "แก้ไขโปรเจคสำเร็จ",
+        message: `อัปเดต "${updated.name}" เรียบร้อย`,
+        forUserId: "all",
+      })
+    }
+    setEditingProject(null)
+    setIsCreating(false)
+  }
+
+  function handleDelete(id: number) {
+    const p = projects.find((x) => x.id === id)
+    setProjects((prev) => prev.filter((x) => x.id !== id))
+    if (p) {
+      addNotif({
+        type: "project",
+        title: "โปรเจคถูกลบ",
+        message: `Admin ลบโปรเจค "${p.name}" แล้ว`,
+        forUserId: p.ownerId,
+      })
     }
     setEditingProject(null)
   }
@@ -53,41 +90,24 @@ export default function ProjectsPage() {
 
   return (
     <div style={S.page}>
-      {/* Header */}
       <div style={S.header}>
         <div>
           <h1 style={S.title}>Projects</h1>
           <p style={S.subtitle}>
-            {isAdmin
-              ? `${projects.length} โปรเจคทั้งหมด`
-              : `${projects.length} โปรเจคของคุณ`}
+            {isAdmin ? `${projects.length} โปรเจคทั้งหมด` : `${projects.length} โปรเจคของคุณ`}
           </p>
         </div>
-        {isAdmin && (
-          <button onClick={openCreate} style={S.addBtn}>+ เพิ่มโปรเจค</button>
-        )}
+        {isAdmin && <button onClick={openCreate} style={S.addBtn}>+ เพิ่มโปรเจค</button>}
       </div>
 
-      {/* Role badge */}
       <div style={{ marginBottom: 20 }}>
-        <span style={{
-          ...S.roleBadge,
-          background: isAdmin ? "#4f8ef722" : "#34d39922",
-          color: isAdmin ? "#4f8ef7" : "#34d399",
-          border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}`,
-        }}>
+        <span style={{ ...S.roleBadge, background: isAdmin ? "#4f8ef722" : "#34d39922", color: isAdmin ? "#4f8ef7" : "#34d399", border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}` }}>
           {isAdmin ? "👑 Admin — เห็นและแก้ไขได้ทุกโปรเจค" : "👤 Customer — เห็นเฉพาะโปรเจคของคุณ"}
         </span>
       </div>
 
-      {/* Filters */}
       <div style={S.filterRow}>
-        <input
-          placeholder="ค้นหาโปรเจค..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={S.searchInput}
-        />
+        <input placeholder="ค้นหาโปรเจค..." value={search} onChange={(e) => setSearch(e.target.value)} style={S.searchInput} />
         <div style={S.tabGroup}>
           {(["all", "pending", "in_progress", "completed"] as const).map((s) => (
             <button key={s} onClick={() => setFilterStatus(s)}
@@ -98,69 +118,43 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Grid */}
-      {filtered.length === 0 ? (
-        <div style={S.empty}>ไม่พบโปรเจค</div>
-      ) : (
+      {filtered.length === 0 ? <div style={S.empty}>ไม่พบโปรเจค</div> : (
         <div style={S.grid}>
           {filtered.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              isAdmin={isAdmin}
-              onEdit={() => { setIsCreating(false); setEditingProject(project) }}
-            />
+            <ProjectCard key={project.id} project={project} isAdmin={isAdmin}
+              onEdit={() => { setIsCreating(false); setEditingProject(project) }} />
           ))}
         </div>
       )}
 
-      {/* Modal */}
       {editingProject && isAdmin && (
-        <EditModal
-          project={editingProject}
-          isCreating={isCreating}
+        <EditModal project={editingProject} isCreating={isCreating}
           onClose={() => { setEditingProject(null); setIsCreating(false) }}
-          onSave={handleSave}
-          onDelete={(id) => {
-            setProjects((prev) => prev.filter((p) => p.id !== id))
-            setEditingProject(null)
-          }}
-        />
+          onSave={handleSave} onDelete={handleDelete} />
       )}
     </div>
   )
 }
 
-// ─── Project Card ─────────────────────────────────────────────────────────────
-
-function ProjectCard({ project: p, isAdmin, onEdit }: {
-  project: Project; isAdmin: boolean; onEdit: () => void
-}) {
+function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmin: boolean; onEdit: () => void }) {
   const { color, label } = STATUS_CONFIG[p.status]
   return (
     <div style={S.card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={S.cardName}>{p.name}</div>
-          <a href={`https://${p.website}`} target="_blank" rel="noreferrer" style={S.cardWebsite}>
-            🌐 {p.website}
-          </a>
+          <a href={`https://${p.website}`} target="_blank" rel="noreferrer" style={S.cardWebsite}>🌐 {p.website}</a>
         </div>
         <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>{label}</span>
       </div>
-
       <p style={S.cardDesc}>{p.description}</p>
-
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
           <span style={{ color: "#6b7280" }}>ความคืบหน้า</span>
           <span style={{ color: "#f9fafb", fontWeight: 700, fontFamily: "monospace" }}>{p.progress}%</span>
         </div>
-        <div style={S.progressTrack}>
-          <div style={{ ...S.progressFill, width: `${p.progress}%`, background: color }} />
-        </div>
+        <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${p.progress}%`, background: color }} /></div>
       </div>
-
       <div style={S.metaRow}>
         <div style={S.metaItem}>
           <span style={S.metaLabel}>เริ่มต้น</span>
@@ -171,37 +165,26 @@ function ProjectCard({ project: p, isAdmin, onEdit }: {
           <span style={{ ...S.metaValue, color: "#a78bfa" }}>{p.package}</span>
         </div>
       </div>
-
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex" }}>
           {p.managers.map((m, i) => (
-            <div key={m.id} title={m.name} style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: m.color + "33", color: m.color,
-              border: "2px solid #111827", marginLeft: i > 0 ? -8 : 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 10, fontWeight: 700, zIndex: p.managers.length - i, position: "relative",
-            }}>{m.avatar}</div>
+            <div key={m.id} title={m.name} style={{ width: 28, height: 28, borderRadius: "50%", background: m.color + "33", color: m.color, border: "2px solid #111827", marginLeft: i > 0 ? -8 : 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, position: "relative", zIndex: p.managers.length - i }}>
+              {m.avatar}
+            </div>
           ))}
         </div>
-        {isAdmin && (
-          <button onClick={onEdit} style={S.editBtn}>แก้ไข</button>
-        )}
+        {isAdmin && <button onClick={onEdit} style={S.editBtn}>แก้ไข</button>}
       </div>
     </div>
   )
 }
-
-// ─── Edit Modal (admin only) ──────────────────────────────────────────────────
 
 function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
   project: Project; isCreating: boolean
   onClose: () => void; onSave: (p: Project) => void; onDelete: (id: number) => void
 }) {
   const [form, setForm] = useState<Project>({ ...project })
-  function set(key: keyof Project, value: any) {
-    setForm((prev) => ({ ...prev, [key]: value }))
-  }
+  function set(key: keyof Project, value: any) { setForm((prev) => ({ ...prev, [key]: value })) }
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={(e) => e.stopPropagation()}>
@@ -216,10 +199,7 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
           <SLabel label="ข้อมูลหลัก" />
           <Field label="ชื่อโปรเจค"><Input value={form.name} onChange={(v) => set("name", v)} /></Field>
           <Field label="เว็บไซต์"><Input value={form.website} onChange={(v) => set("website", v)} placeholder="example.com" /></Field>
-          <Field label="คำอธิบาย">
-            <textarea value={form.description} onChange={(e) => set("description", e.target.value)}
-              rows={3} style={{ ...S.input, resize: "vertical" }} />
-          </Field>
+          <Field label="คำอธิบาย"><textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} style={{ ...S.input, resize: "vertical" }} /></Field>
           <SLabel label="สถานะและความคืบหน้า" />
           <Field label="สถานะ">
             <select value={form.status} onChange={(e) => set("status", e.target.value)} style={S.input}>
@@ -229,9 +209,7 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
             </select>
           </Field>
           <Field label={`ความคืบหน้า (${form.progress}%)`}>
-            <input type="range" min={0} max={100} value={form.progress}
-              onChange={(e) => set("progress", Number(e.target.value))}
-              style={{ width: "100%", accentColor: "#4f8ef7" }} />
+            <input type="range" min={0} max={100} value={form.progress} onChange={(e) => set("progress", Number(e.target.value))} style={{ width: "100%", accentColor: "#4f8ef7" }} />
           </Field>
           <Field label="วันที่เริ่ม"><Input type="date" value={form.startDate} onChange={(v) => set("startDate", v)} /></Field>
           <SLabel label="ข้อมูลเทคนิค" />
@@ -244,9 +222,7 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
           <Field label="Token"><Input value={form.token} onChange={(v) => set("token", v)} /></Field>
         </div>
         <div style={{ ...S.modalFooter, justifyContent: isCreating ? "flex-end" : "space-between" }}>
-          {!isCreating && (
-            <button onClick={() => { if (confirm("ลบโปรเจคนี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบโปรเจค</button>
-          )}
+          {!isCreating && <button onClick={() => { if (confirm("ลบโปรเจคนี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบโปรเจค</button>}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={onClose} style={S.cancelBtn}>ยกเลิก</button>
             <button onClick={() => onSave(form)} style={S.saveBtn}>บันทึก</button>
@@ -277,7 +253,7 @@ const S: Record<string, React.CSSProperties> = {
   filterRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" },
   searchInput: { background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 14px", color: "#f9fafb", fontSize: 13, outline: "none", width: 220 },
   tabGroup: { display: "flex", gap: 4, background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: 4 },
-  tabBtn: { border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" },
+  tabBtn: { border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 },
   card: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 },
   cardName: { fontSize: 16, fontWeight: 700, color: "#f9fafb", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
