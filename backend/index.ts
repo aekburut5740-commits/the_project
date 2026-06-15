@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment } from "../database/route"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -67,7 +67,9 @@ new Elysia()
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     const { name, description } = body as any
-    return createProject(name, description, result.id)
+    const project = await createProject(name, description, result.id)
+    await createLog(result.id, project.id, `สร้างโปรเจค "${name}"`)
+    return project
   })
 
   // Admin: ดูทุก project (ต้องเป็น admin)
@@ -247,7 +249,230 @@ new Elysia()
       return { message: err.message }
     }
   })
+// ดูไฟล์ทั้งหมดในโปรเจค
+  .get("/api/projects/:id/files", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getFiles(Number(params.id))
+  })
 
+  // อัปโหลดไฟล์
+  .post("/api/projects/:id/files", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    
+    const { file } = body as any
+    if (!file) {
+      set.status = 400
+      return { message: "กรุณาเลือกไฟล์" }
+    }
+
+    const filename = file.name
+    const filesize = file.size
+    const uploadDir = "./uploads"
+    const filepath = `${uploadDir}/${Date.now()}_${filename}`
+
+    // บันทึกไฟล์ลงในเครื่อง
+    await Bun.write(filepath, file)
+
+    return saveFile(Number(params.id), result.id, filename, filepath, filesize)
+  })
+
+  // ลบไฟล์
+  .delete("/api/files/:id", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    try {
+      return await deleteFile(Number(params.id), result.id, result.role)
+    } catch (err: any) {
+      set.status = 403
+      return { message: err.message }
+    }
+  })
+
+  // ดู log ของโปรเจค
+  .get("/api/projects/:id/logs", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getProjectLogs(Number(params.id))
+  })
+
+  // Admin: ดู log ทั้งหมด
+  .get("/api/admin/logs", ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return getAllLogs()
+  })
+// ดู milestone ทั้งหมดของโปรเจค
+  .get("/api/projects/:id/milestones", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getMilestones(Number(params.id))
+  })
+
+  // Admin: สร้าง milestone
+  .post("/api/projects/:id/milestones", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { title, description, start_date, end_date, phase } = body as any
+    return createMilestone(Number(params.id), title, description, start_date, end_date, phase)
+  })
+
+  // Admin: อัปเดต milestone
+  .put("/api/milestones/:id", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { title, description, status, progress, start_date, end_date, phase } = body as any
+    try {
+      return await updateMilestone(Number(params.id), title, description, status, progress, start_date, end_date, phase)
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
+
+  // Admin: ลบ milestone
+  .delete("/api/milestones/:id", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    try {
+      return await deleteMilestone(Number(params.id))
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
+
+  // Customer: สร้าง Ticket
+  .post("/api/projects/:id/feedbacks", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { title, message, priority } = body as any
+    if (!title || !message) {
+      set.status = 400
+      return { message: "กรุณาใส่หัวข้อและรายละเอียด" }
+    }
+    return createFeedback(Number(params.id), result.id, title, message, priority || "medium")
+  })
+
+  // ดู Ticket ทั้งหมดของโปรเจค
+  .get("/api/projects/:id/feedbacks", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getFeedbacks(Number(params.id))
+  })
+
+  // Admin: ดู Ticket ทั้งหมดในระบบ
+  .get("/api/admin/feedbacks", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return getAllFeedbacks()
+  })
+
+  // Admin: เปลี่ยนสถานะ Ticket
+  .patch("/api/admin/feedbacks/:id/status", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { status } = body as any
+    try {
+      return await updateFeedbackStatus(Number(params.id), status)
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
+
+  // ตอบกลับ Ticket
+  .post("/api/feedbacks/:id/replies", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { message } = body as any
+    if (!message) {
+      set.status = 400
+      return { message: "กรุณาใส่ข้อความ" }
+    }
+    return createFeedbackReply(Number(params.id), result.id, message)
+  })
+
+  // ดูการตอบกลับของ Ticket
+  .get("/api/feedbacks/:id/replies", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getFeedbackReplies(Number(params.id))
+  })
+
+  // Customer: รายงานโปรเจคของตัวเอง
+  .get("/api/reports", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getReport(result.id)
+  })
+
+  // Admin: รายงานภาพรวมทุกโปรเจค
+  .get("/api/admin/reports", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return getAdminReport()
+  })
+
+  // Git Pulse: ดึงข้อมูล Commit จาก GitHub
+  .get("/api/gitpulse", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    try {
+      const response = await fetch(
+        "https://api.github.com/repos/aekburut5740-commits/the_project/commits",
+        {
+          headers: {
+            "User-Agent": "the_project-app"
+          }
+        }
+      )
+      if (!response.ok) {
+        set.status = 400
+        return { message: "ไม่สามารถดึงข้อมูลจาก GitHub ได้" }
+      }
+      const commits = await response.json() as any[]
+      return commits.slice(0, 10).map((c: any) => ({
+        message: c.commit.message,
+        author: c.commit.author.name,
+        date: c.commit.author.date,
+        url: c.html_url
+      }))
+    } catch (err: any) {
+      set.status = 500
+      return { message: "เกิดข้อผิดพลาด" }
+    }
+  })
+  
   .listen(4000)
 
 console.log("Server running on port 4000")

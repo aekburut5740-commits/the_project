@@ -302,3 +302,281 @@ export async function deleteComment(comment_id: number, user_id: number, role: s
   if (!result.rows.length) throw new Error("ไม่พบ comment หรือไม่มีสิทธิ์ลบ")
   return result.rows[0]
 }
+
+// ===== FILE UPLOAD =====
+
+// บันทึกข้อมูลไฟล์ลง Database
+export async function saveFile(project_id: number, user_id: number, filename: string, filepath: string, filesize: number) {
+  const result = await db.query(
+    `INSERT INTO files (project_id, user_id, filename, filepath, filesize) 
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [project_id, user_id, filename, filepath, filesize]
+  )
+  return result.rows[0]
+}
+
+// ดูไฟล์ทั้งหมดในโปรเจค
+export async function getFiles(project_id: number) {
+  const result = await db.query(
+    `SELECT files.*, users.username 
+     FROM files 
+     JOIN users ON files.user_id = users.id
+     WHERE files.project_id = $1 
+     ORDER BY files.created_at DESC`,
+    [project_id]
+  )
+  return result.rows
+}
+
+// ลบไฟล์
+export async function deleteFile(file_id: number, user_id: number, role: string) {
+  let result
+  if (role === 'admin') {
+    result = await db.query(
+      `DELETE FROM files WHERE id = $1 RETURNING *`,
+      [file_id]
+    )
+  } else {
+    result = await db.query(
+      `DELETE FROM files WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [file_id, user_id]
+    )
+  }
+  if (!result.rows.length) throw new Error("ไม่พบไฟล์หรือไม่มีสิทธิ์ลบ")
+  return result.rows[0]
+}
+// ===== ACTIVITY LOG =====
+
+// บันทึก log (ใช้ภายในระบบ)
+export async function createLog(user_id: number, project_id: number, action: string) {
+  await db.query(
+    `INSERT INTO activity_logs (user_id, project_id, action) 
+     VALUES ($1, $2, $3)`,
+    [user_id, project_id, action]
+  )
+}
+
+// ดู log ของโปรเจค
+export async function getProjectLogs(project_id: number) {
+  const result = await db.query(
+    `SELECT activity_logs.*, users.username 
+     FROM activity_logs 
+     LEFT JOIN users ON activity_logs.user_id = users.id
+     WHERE activity_logs.project_id = $1 
+     ORDER BY activity_logs.created_at DESC`,
+    [project_id]
+  )
+  return result.rows
+}
+
+// Admin: ดู log ทั้งหมด
+export async function getAllLogs() {
+  const result = await db.query(
+    `SELECT activity_logs.*, users.username, projects.name as project_name
+     FROM activity_logs 
+     LEFT JOIN users ON activity_logs.user_id = users.id
+     LEFT JOIN projects ON activity_logs.project_id = projects.id
+     ORDER BY activity_logs.created_at DESC`
+  )
+  return result.rows
+}
+// ===== MILESTONES =====
+
+// ดู milestone ทั้งหมดของโปรเจค (เรียงตาม date)
+export async function getMilestones(project_id: number) {
+  const result = await db.query(
+    `SELECT * FROM milestones 
+     WHERE project_id = $1 
+     ORDER BY start_date ASC`,
+    [project_id]
+  )
+  return result.rows
+}
+// Admin: สร้าง milestone
+export async function createMilestone(
+  project_id: number,
+  title: string,
+  description: string,
+  start_date: string,
+  end_date: string,
+  phase: string
+)
+ {
+  const result = await db.query(
+    `INSERT INTO milestones (project_id, title, description, start_date, end_date, phase) 
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [project_id, title, description, start_date, end_date, phase]
+  )
+  return result.rows[0]
+}
+ 
+
+// Admin: อัปเดต milestone
+export async function updateMilestone(
+  id: number,
+  title: string,
+  description: string,
+  status: string,
+  progress: number,
+  start_date: string,
+  end_date: string,
+  phase: string
+) {
+  const result = await db.query(
+    `UPDATE milestones 
+     SET title = $1, description = $2, status = $3, 
+         progress = $4, start_date = $5, end_date = $6, phase = $7
+     WHERE id = $8 RETURNING *`,
+    [title, description, status, progress, start_date, end_date, phase, id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบ milestone")
+  return result.rows[0]
+}
+
+// Admin: ลบ milestone
+export async function deleteMilestone(id: number) {
+  const result = await db.query(
+    `DELETE FROM milestones WHERE id = $1 RETURNING *`,
+    [id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบ milestone")
+  return result.rows[0]
+}
+
+// ===== FEEDBACK CENTER =====
+
+// Customer: สร้าง Ticket
+export async function createFeedback(project_id: number, user_id: number, title: string, message: string, priority: string) {
+  const result = await db.query(
+    `INSERT INTO feedbacks (project_id, user_id, title, message, priority) 
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [project_id, user_id, title, message, priority]
+  )
+  return result.rows[0]
+}
+
+// ดู Ticket ทั้งหมดของโปรเจค
+export async function getFeedbacks(project_id: number) {
+  const result = await db.query(
+    `SELECT feedbacks.*, users.username 
+     FROM feedbacks 
+     JOIN users ON feedbacks.user_id = users.id
+     WHERE feedbacks.project_id = $1 
+     ORDER BY feedbacks.created_at DESC`,
+    [project_id]
+  )
+  return result.rows
+}
+
+// Admin: ดู Ticket ทั้งหมดในระบบ
+export async function getAllFeedbacks() {
+  const result = await db.query(
+    `SELECT feedbacks.*, users.username, projects.name as project_name
+     FROM feedbacks 
+     JOIN users ON feedbacks.user_id = users.id
+     JOIN projects ON feedbacks.project_id = projects.id
+     ORDER BY feedbacks.created_at DESC`
+  )
+  return result.rows
+}
+
+// Admin: เปลี่ยนสถานะ Ticket
+export async function updateFeedbackStatus(id: number, status: string) {
+  const result = await db.query(
+    `UPDATE feedbacks SET status = $1 WHERE id = $2 RETURNING *`,
+    [status, id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบ Ticket")
+  return result.rows[0]
+}
+
+// ตอบกลับ Ticket
+export async function createFeedbackReply(feedback_id: number, user_id: number, message: string) {
+  const result = await db.query(
+    `INSERT INTO feedback_replies (feedback_id, user_id, message) 
+     VALUES ($1, $2, $3) RETURNING *`,
+    [feedback_id, user_id, message]
+  )
+  return result.rows[0]
+}
+
+// ดูการตอบกลับของ Ticket
+export async function getFeedbackReplies(feedback_id: number) {
+  const result = await db.query(
+    `SELECT feedback_replies.*, users.username 
+     FROM feedback_replies 
+     JOIN users ON feedback_replies.user_id = users.id
+     WHERE feedback_replies.feedback_id = $1 
+     ORDER BY feedback_replies.created_at ASC`,
+    [feedback_id]
+  )
+  return result.rows
+}
+
+// ===== REPORTS =====
+
+// Customer: รายงานโปรเจคของตัวเอง
+export async function getReport(user_id: number) {
+  const projects = await db.query(
+    `SELECT id, name, status, progress, created_at 
+     FROM projects 
+     WHERE user_id = $1 
+     ORDER BY created_at DESC`,
+    [user_id]
+  )
+
+  const milestones = await db.query(
+    `SELECT m.*, p.name as project_name 
+     FROM milestones m
+     JOIN projects p ON m.project_id = p.id
+     WHERE p.user_id = $1
+     ORDER BY m.start_date ASC`,
+    [user_id]
+  )
+
+  const feedbacks = await db.query(
+    `SELECT f.*, p.name as project_name 
+     FROM feedbacks f
+     JOIN projects p ON f.project_id = p.id
+     WHERE p.user_id = $1
+     ORDER BY f.created_at DESC`,
+    [user_id]
+  )
+
+  return {
+    projects: projects.rows,
+    milestones: milestones.rows,
+    feedbacks: feedbacks.rows
+  }
+}
+
+// Admin: รายงานภาพรวมทุกโปรเจค
+export async function getAdminReport() {
+  const projects = await db.query(
+    `SELECT p.id, p.name, p.status, p.progress, p.created_at, u.username
+     FROM projects p
+     JOIN users u ON p.user_id = u.id
+     ORDER BY p.created_at DESC`
+  )
+
+  const milestones = await db.query(
+    `SELECT m.*, p.name as project_name
+     FROM milestones m
+     JOIN projects p ON m.project_id = p.id
+     ORDER BY m.start_date ASC`
+  )
+
+  const feedbacks = await db.query(
+    `SELECT f.*, u.username, p.name as project_name
+     FROM feedbacks f
+     JOIN users u ON f.user_id = u.id
+     JOIN projects p ON f.project_id = p.id
+     ORDER BY f.created_at DESC`
+  )
+
+  return {
+    projects: projects.rows,
+    milestones: milestones.rows,
+    feedbacks: feedbacks.rows
+  }
+}
