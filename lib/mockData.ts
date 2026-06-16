@@ -182,3 +182,81 @@ export const CATEGORY_CONFIG: Record<DocCategory, { label: string; color: string
   report:     { label: "รายงาน",      color: "#34d399" },
   other:      { label: "อื่นๆ",       color: "#6b7280" },
 }
+
+// ─── Feedback Types ───────────────────────────────────────────────────────────
+
+export type FeedbackStatus = "sent" | "in_progress" | "resolved"
+export type FeedbackPriority = "low" | "medium" | "high"
+
+export interface FeedbackComment {
+  id: number
+  authorId: number
+  authorName: string
+  authorRole: Role
+  message: string
+  createdAt: Date
+}
+
+export interface Feedback {
+  id: number
+  title: string
+  description: string
+  projectId: number
+  authorId: number
+  authorName: string
+  status: FeedbackStatus
+  priority: FeedbackPriority
+  createdAt: Date
+  updatedAt: Date
+  comments: FeedbackComment[]
+  isRead: boolean
+}
+
+export const MOCK_FEEDBACKS: Feedback[] = [
+  {
+    id: 1, title: "หน้าเว็บโหลดช้ามาก",
+    description: "เปิดหน้า homepage ใช้เวลานานกว่า 5 วินาที ทั้งที่ internet ปกติ",
+    projectId: 1, authorId: 2, authorName: "customer_somchai",
+    status: "in_progress", priority: "high",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 30),
+    isRead: true,
+    comments: [
+      { id: 1, authorId: 2, authorName: "customer_somchai", authorRole: "customer", message: "ยังเป็นอยู่เลยครับ รบกวนด้วยนะครับ", createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2) },
+      { id: 2, authorId: 1, authorName: "admin_aek", authorRole: "admin", message: "รับเรื่องแล้วครับ กำลังตรวจสอบอยู่", createdAt: new Date(Date.now() - 1000 * 60 * 30) },
+    ],
+  },
+  {
+    id: 2, title: "ปุ่ม checkout ไม่ทำงาน",
+    description: "กดปุ่ม checkout แล้วไม่มีอะไรเกิดขึ้นเลย ลองหลายครั้งแล้ว ทั้ง mobile และ desktop",
+    projectId: 2, authorId: 2, authorName: "customer_somchai",
+    status: "sent", priority: "high",
+    createdAt: new Date(Date.now() - 1000 * 60 * 20),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 20),
+    isRead: false, comments: [],
+  },
+  {
+    id: 3, title: "อยากให้เพิ่มฟีเจอร์ dark mode",
+    description: "ใช้งานตอนกลางคืนแล้วสว่างมาก อยากให้มี dark mode ด้วยครับ",
+    projectId: 3, authorId: 3, authorName: "customer_nisa",
+    status: "resolved", priority: "low",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+    isRead: true,
+    comments: [
+      { id: 3, authorId: 1, authorName: "admin_aek", authorRole: "admin", message: "เพิ่มให้แล้วครับ ลองดูได้เลย", createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24) },
+    ],
+  },
+]
+
+export const FEEDBACK_STATUS_CONFIG: Record<FeedbackStatus, { label: string; color: string }> = {
+  sent:        { label: "ส่งถึงแล้ว",     color: "#6b7280" },
+  in_progress: { label: "กำลังดำเนินการ", color: "#4f8ef7" },
+  resolved:    { label: "เสร็จสิ้น",       color: "#34d399" },
+}
+
+export const FEEDBACK_PRIORITY_CONFIG: Record<FeedbackPriority, { label: string; color: string }> = {
+  low:    { label: "ต่ำ",  color: "#6b7280" },
+  medium: { label: "กลาง", color: "#fbbf24" },
+  high:   { label: "สูง",  color: "#f87171" },
+}

@@ -9,7 +9,7 @@ import {
   Settings, LogOut, Pencil, Check, X, Camera
 } from "lucide-react";
 import { useNotifications } from "@/lib/notificationStore";
-import { MOCK_CURRENT_USER } from "@/lib/mockData";
+import { MOCK_CURRENT_USER, MOCK_FEEDBACKS } from "@/lib/mockData";
 
 const navItems = [
   { label: "Dashboard",      href: "/dashboard",               icon: LayoutDashboard },
@@ -28,6 +28,7 @@ export default function Sidebar() {
   const isAdmin = user.role === "admin";
   const { unreadCount } = useNotifications();
   const count = unreadCount(user.id, isAdmin);
+  const feedbackUnread = isAdmin ? MOCK_FEEDBACKS.filter((f) => !f.isRead).length : 0;
 
   // Profile state
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export default function Sidebar() {
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = pathname === href;
           const isNotif = href === "/dashboard/notifications";
+          const isFeedback = href === "/dashboard/feedback";
           return (
             <Link key={href} href={href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
@@ -78,6 +80,17 @@ export default function Sidebar() {
                   textAlign: "center",
                 }}>
                   {count > 99 ? "99+" : count}
+                </span>
+              )}
+              {isFeedback && feedbackUnread > 0 && (
+                <span style={{
+                  background: active ? "#fff" : "#ef4444",
+                  color: active ? "#dc2626" : "#fff",
+                  fontSize: 10, fontWeight: 700,
+                  padding: "1px 6px", borderRadius: 999,
+                  minWidth: 18, textAlign: "center" as const,
+                }}>
+                  {feedbackUnread}
                 </span>
               )}
             </Link>

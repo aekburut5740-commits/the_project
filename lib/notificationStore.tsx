@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
 
-export type NotifType = "project" | "milestone" | "document" | "system"
+export type NotifType = "project" | "milestone" | "document" | "system" | "feedback"
 
 export interface Notification {
   id: number
