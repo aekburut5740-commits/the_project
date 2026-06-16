@@ -219,23 +219,34 @@ export async function getAdminDashboard() {
 // ===== NOTIFICATIONS =====
 
 // สร้าง notification (ใช้ภายในระบบ ไม่ใช่ API)
-export async function createNotification(user_id: number, project_id: number, message: string) {
+export async function createNotification(user_id: number, project_id: number, message: string, url?: string) {
   await db.query(
-    `INSERT INTO notifications (user_id, project_id, message) 
-     VALUES ($1, $2, $3)`,
-    [user_id, project_id, message]
+    `INSERT INTO notifications (user_id, project_id, message, url) 
+     VALUES ($1, $2, $3, $4)`,
+    [user_id, project_id, message, url || null]
   )
 }
 
 // Customer: ดูการแจ้งเตือนของตัวเอง
 export async function getNotifications(user_id: number) {
+  // เช็คก่อนว่า Maintenance Mode เปิดอยู่ไหม
+  const maintenance = await db.query(
+    `SELECT is_active FROM maintenance WHERE id = 1`
+  )
+  const isMaintenanceActive = maintenance.rows[0]?.is_active
+
   const result = await db.query(
     `SELECT * FROM notifications 
      WHERE user_id = $1 
      ORDER BY created_at DESC`,
     [user_id]
   )
-  return result.rows
+
+  // ถ้า Maintenance Mode เปิดอยู่ ให้ซ่อน URL ทั้งหมด
+  return result.rows.map((n: any) => ({
+    ...n,
+    url: isMaintenanceActive ? null : n.url
+  }))
 }
 
 // Customer: กดอ่านแล้ว (ทีละอัน)
@@ -579,4 +590,57 @@ export async function getAdminReport() {
     milestones: milestones.rows,
     feedbacks: feedbacks.rows
   }
+}
+
+// ===== MILESTONE DUE CHECK =====
+
+export async function checkMilestoneDue() {
+  // ดึง Milestone ที่ยังไม่เสร็จ และเหลือเวลาไม่เกิน 3 วัน
+  const result = await db.query(
+    `SELECT m.*, p.name as project_name, p.user_id
+     FROM milestones m
+     JOIN projects p ON m.project_id = p.id
+     WHERE m.status != 'completed'
+     AND m.end_date <= NOW() + INTERVAL '3 days'
+     AND m.end_date >= NOW()`
+  )
+
+  // ส่ง Notification ให้ลูกค้าทุก Milestone ที่ใกล้ครบกำหนด
+  for (const milestone of result.rows) {
+    await db.query(
+      `INSERT INTO notifications (user_id, project_id, message)
+       VALUES ($1, $2, $3)`,
+      [
+        milestone.user_id,
+        milestone.project_id,
+        `Milestone "${milestone.title}" ในโปรเจค "${milestone.project_name}" ใกล้ครบกำหนดแล้ว!`
+      ]
+    )
+  }
+
+  return {
+    message: `พบ ${result.rows.length} Milestone ที่ใกล้ครบกำหนด`,
+    milestones: result.rows
+  }
+}
+
+// ===== MAINTENANCE MODE =====
+
+// ดูสถานะ Maintenance Mode
+export async function getMaintenanceStatus() {
+  const result = await db.query(
+    `SELECT * FROM maintenance WHERE id = 1`
+  )
+  return result.rows[0]
+}
+
+// Admin: เปิด/ปิด Maintenance Mode
+export async function setMaintenanceMode(is_active: boolean, message: string) {
+  const result = await db.query(
+    `UPDATE maintenance 
+     SET is_active = $1, message = $2, updated_at = NOW()
+     WHERE id = 1 RETURNING *`,
+    [is_active, message]
+  )
+  return result.rows[0]
 }

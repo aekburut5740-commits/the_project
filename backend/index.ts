@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport } from "../database/route"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -91,13 +91,14 @@ new Elysia()
       set.status = 403
       return { message: "ไม่มีสิทธิ์เข้าถึง" }
     }
-    const { status } = body as any
+    const { status, url } = body as any
     const updated = await updateProjectStatus(Number(params.id), status)
-    // สร้าง notification อัตโนมัติ
+    // สร้าง notification อัตโนมัติ พร้อมแนบ URL
     await createNotification(
       updated.user_id,
       updated.id,
-      `โปรเจค "${updated.name}" ถูกเปลี่ยนสถานะเป็น "${status}"`
+      `โปรเจค "${updated.name}" ถูกเปลี่ยนสถานะเป็น "${status}"`,
+      url || null
     )
     return updated
   })
@@ -307,6 +308,18 @@ new Elysia()
     }
     return getAllLogs()
   })
+
+  // Admin: เช็ค Milestone ที่ใกล้ครบกำหนด
+  .get("/api/admin/milestones/check-due", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    return checkMilestoneDue()
+  })
+  
 // ดู milestone ทั้งหมดของโปรเจค
   .get("/api/projects/:id/milestones", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -472,6 +485,25 @@ new Elysia()
       return { message: "เกิดข้อผิดพลาด" }
     }
   })
+// ดูสถานะ Maintenance Mode (ทุกคนดูได้)
+  .get("/api/maintenance", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getMaintenanceStatus()
+  })
+
+  // Admin: เปิด/ปิด Maintenance Mode
+  .patch("/api/admin/maintenance", async ({ headers, set, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { is_active, message } = body as any
+    return setMaintenanceMode(is_active, message)
+  })
+  
   
   .listen(4000)
 
