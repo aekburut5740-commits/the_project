@@ -271,6 +271,18 @@ export async function markAllAsRead(user_id: number) {
   return { message: "อ่านทั้งหมดแล้ว" }
 }
 
+// Customer: บันทึกเวลาที่คลิกลิงก์ใน Notification
+export async function clickNotification(notification_id: number, user_id: number) {
+  const result = await db.query(
+    `UPDATE notifications 
+     SET clicked_at = NOW()
+     WHERE id = $1 AND user_id = $2 
+     RETURNING *`,
+    [notification_id, user_id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบการแจ้งเตือน")
+  return result.rows[0]
+}
 // ===== COMMENTS =====
 
 // ดู comment ทั้งหมดในโปรเจค
@@ -643,4 +655,35 @@ export async function setMaintenanceMode(is_active: boolean, message: string) {
     [is_active, message]
   )
   return result.rows[0]
+}
+
+// ===== WEBHOOK =====
+
+// บันทึกข้อมูล Webhook จาก GitHub
+export async function saveWebhook(
+  event: string,
+  pusher: string,
+  branch: string,
+  commit_message: string,
+  commit_url: string,
+  repository: string,
+  pushed_at: string
+) {
+  const result = await db.query(
+    `INSERT INTO webhook_logs 
+     (event, pusher, branch, commit_message, commit_url, repository, pushed_at) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [event, pusher, branch, commit_message, commit_url, repository, pushed_at]
+  )
+  return result.rows[0]
+}
+
+// ดู Webhook ทั้งหมด
+export async function getWebhooks() {
+  const result = await db.query(
+    `SELECT * FROM webhook_logs 
+     ORDER BY created_at DESC 
+     LIMIT 20`
+  )
+  return result.rows
 }

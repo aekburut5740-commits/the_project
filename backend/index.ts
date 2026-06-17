@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode } from "../database/route"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -502,6 +502,47 @@ new Elysia()
     }
     const { is_active, message } = body as any
     return setMaintenanceMode(is_active, message)
+  })
+
+  // Customer: บันทึกเวลาที่คลิกลิงก์ใน Notification
+  .patch("/api/notifications/:id/click", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    try {
+      return await clickNotification(Number(params.id), result.id)
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
+
+  // รับข้อมูล Webhook จาก GitHub
+  .post("/api/webhook/git-push", async ({ body, set }) => {
+    try {
+      const payload = body as any
+      const event = "push"
+      const pusher = payload?.pusher?.name || "unknown"
+      const branch = payload?.ref?.replace("refs/heads/", "") || "unknown"
+      const commit = payload?.commits?.[0]
+      const commit_message = commit?.message || ""
+      const commit_url = commit?.url || ""
+      const repository = payload?.repository?.full_name || ""
+      const pushed_at = payload?.repository?.pushed_at
+        ? new Date(payload.repository.pushed_at * 1000).toISOString()
+        : new Date().toISOString()
+
+      return await saveWebhook(event, pusher, branch, commit_message, commit_url, repository, pushed_at)
+    } catch (err: any) {
+      set.status = 400
+      return { message: "รับข้อมูลไม่สำเร็จ" }
+    }
+  })
+
+  // ดู Webhook ทั้งหมด
+  .get("/api/webhook/git-push", async ({ headers, set }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getWebhooks()
   })
   
   
