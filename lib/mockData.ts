@@ -66,7 +66,7 @@ export const MOCK_USERS: User[] = [
 
 // เปลี่ยน index นี้เพื่อจำลอง login เป็น user คนละคน
 // [0] = admin, [1] = customer มี 2 โปรเจค, [2] = customer มี 1 โปรเจค
-export const MOCK_CURRENT_USER: User = MOCK_USERS[0]
+export const MOCK_CURRENT_USER: User = MOCK_USERS[1]
 
 // ─── Mock Managers ────────────────────────────────────────────────────────────
 
@@ -260,3 +260,32 @@ export const FEEDBACK_PRIORITY_CONFIG: Record<FeedbackPriority, { label: string;
   medium: { label: "กลาง", color: "#fbbf24" },
   high:   { label: "สูง",  color: "#f87171" },
 }
+// ─── Project Comments ─────────────────────────────────────────────────────────
+
+export interface ProjectComment {
+  id: number
+  projectId: number
+  authorId: number
+  authorName: string
+  authorRole: Role
+  message: string
+  createdAt: Date
+}
+
+export const MOCK_PROJECT_COMMENTS: ProjectComment[] = [
+  {
+    id: 1, projectId: 1, authorId: 2, authorName: "customer_somchai", authorRole: "customer",
+    message: "อยากให้ปรับสีปุ่มหลักเป็นสีน้ำเงินเข้มขึ้นหน่อยครับ",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5),
+  },
+  {
+    id: 2, projectId: 1, authorId: 1, authorName: "admin_aek", authorRole: "admin",
+    message: "รับทราบครับ จะปรับให้ในรอบถัดไป",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4),
+  },
+  {
+    id: 3, projectId: 2, authorId: 1, authorName: "admin_aek", authorRole: "admin",
+    message: "เริ่มงานในส่วน payment gateway แล้วครับ คาดว่าเสร็จภายในสัปดาห์นี้",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+  },
+]
