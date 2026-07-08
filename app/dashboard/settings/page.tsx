@@ -40,8 +40,7 @@ export default function SettingsPage() {
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-8">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-slate-500 mb-2">Settings</p>
-            <h1 className="text-3xl font-semibold text-white">Account settings</h1>
+            <h1 className="text-3xl font-semibold text-white">Settings</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-400">
               จัดการข้อมูลบัญชีและการแจ้งเตือนหลัก โดยไม่ซ้ำกับหน้าการแจ้งเตือนหลักของระบบ
             </p>
