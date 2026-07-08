@@ -66,7 +66,7 @@ export const MOCK_USERS: User[] = [
 
 // เปลี่ยน index นี้เพื่อจำลอง login เป็น user คนละคน
 // [0] = admin, [1] = customer มี 2 โปรเจค, [2] = customer มี 1 โปรเจค
-export const MOCK_CURRENT_USER: User = MOCK_USERS[1]
+export const MOCK_CURRENT_USER: User = MOCK_USERS[0]
 
 // ─── Mock Managers ────────────────────────────────────────────────────────────
 

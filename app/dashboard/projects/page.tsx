@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import Link from "next/link"
 import {
   MOCK_CURRENT_USER, MOCK_PROJECTS, STATUS_CONFIG,
   type Project, type ProjectStatus,
@@ -138,12 +139,22 @@ export default function ProjectsPage() {
 
 function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmin: boolean; onEdit: () => void }) {
   const { color, label } = STATUS_CONFIG[p.status]
+  const detailHref = `/dashboard/projects/${p.id}`
+
   return (
-    <div style={S.card}>
+    <div style={{ ...S.card, padding: "15px 15px 5px 15px", overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={S.cardName}>{p.name}</div>
-          <a href={`https://${p.website}`} target="_blank" rel="noreferrer" style={S.cardWebsite}>🌐 {p.website}</a>
+          <a
+            href={`https://${p.website}`}
+            target="_blank"
+            rel="noreferrer"
+            style={S.cardWebsite}
+            onClick={(e) => e.stopPropagation()}
+          >
+            🌐 {p.website}
+          </a>
         </div>
         <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>{label}</span>
       </div>
@@ -173,8 +184,24 @@ function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmi
             </div>
           ))}
         </div>
-        {isAdmin && <button onClick={onEdit} style={S.editBtn}>แก้ไข</button>}
       </div>
+      <Link
+        href={detailHref}
+        style={{ padding:"3px",margin:"0px 0px 10px 0px", textAlign: "center", fontSize: 16, fontWeight: 200, background: color + "22", color, border: "1px solid gray", borderRadius:"14px 14px 14px 14px" }}
+      >detail</Link>
+      {isAdmin && (
+        <div style={{ borderTop: "1px solid #1f2937", padding: "12px 22px 20px", display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            style={S.editBtn}
+          >
+            แก้ไข
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -255,7 +282,7 @@ const S: Record<string, React.CSSProperties> = {
   tabGroup: { display: "flex", gap: 4, background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: 4 },
   tabBtn: { border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 },
-  card: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 },
+  card: { background: "#111827", border: "1px solid #8b8b8b", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 },
   cardName: { fontSize: 16, fontWeight: 700, color: "#f9fafb", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
   cardWebsite: { fontSize: 12, color: "#4f8ef7", textDecoration: "none", marginTop: 2, display: "block" },
   cardDesc: { fontSize: 13, color: "#6b7280", lineHeight: 1.6, margin: 0 },
