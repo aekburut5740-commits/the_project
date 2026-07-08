@@ -5,33 +5,33 @@ import jwt from "jsonwebtoken"
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
 
 // สมัครสมาชิก
-export async function register(username: string, password: string, role: string = "user") {
+export async function register(username: string, email: string, password: string, role: string = "user") {
   const hashed = await bcrypt.hash(password, 10)
   
   const result = await db.query(
-    "INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id, username, role",
-    [username, hashed, role]
+    "INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role",
+    [username, email, hashed, role]
   )
   
   return result.rows[0]
 }
 
-// เข้าสู่ระบบ
+// เข้าสู่ระบบ (ใช้ได้ทั้ง username และ email)
 export async function login(username: string, password: string) {
   const result = await db.query(
-    "SELECT * FROM users WHERE username = $1",
+    "SELECT * FROM users WHERE username = $1 OR email = $1",
     [username]
   )
   
   if (!result.rows.length) {
-    throw new Error("Username หรือ Password ไม่ถูกต้อง")
+    throw new Error("Username, Email หรือ Password ไม่ถูกต้อง")
   }
   
   const user = result.rows[0]
   const isMatch = await bcrypt.compare(password, user.password)
   
   if (!isMatch) {
-    throw new Error("Username หรือ Password ไม่ถูกต้อง")
+    throw new Error("Username, Email หรือ Password ไม่ถูกต้อง")
   }
   
   const token = jwt.sign(

@@ -32,9 +32,9 @@ new Elysia()
   .get("/", () => "Server is running!")
 
   .post("/api/register", async ({ body }) => {
-    const { username, password, role } = body as any
+    const { username, email, password, role } = body as any
     try {
-     const user = await register(username, password, role)
+      const user = await register(username, email, password, role)
       return { message: "สมัครสมาชิกสำเร็จ", user }
     } catch (err: any) {
       return { message: err.message }
