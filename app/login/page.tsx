@@ -4,13 +4,14 @@ import React, { useState } from "react";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
 
   const handleSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    console.log({ email, password, remember });
+    console.log({ username, email, password, remember });
     // TODO: เพิ่ม logic การเรียก API ที่นี่
   };
 
@@ -29,6 +30,25 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-5">
+            {/* Username */}
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">
+                Username
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  <UserIcon />
+                </span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="username"
+                  className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+                />
+              </div>
+            </div>
+
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1.5">
@@ -115,6 +135,15 @@ function SocialButton({ label, icon }: { label: string; icon: React.ReactNode })
 }
 
 /* ───────── Inline SVG Icons ───────── */
+
+function UserIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
+}
 
 function MailIcon() {
   return (
