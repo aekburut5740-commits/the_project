@@ -210,8 +210,43 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
   project: Project; isCreating: boolean
   onClose: () => void; onSave: (p: Project) => void; onDelete: (id: number) => void
 }) {
-  const [form, setForm] = useState<Project>({ ...project })
+  const [form, setForm] = useState<Project>({ ...project, managers: project.managers.map((manager) => ({ ...manager })) })
+
   function set(key: keyof Project, value: any) { setForm((prev) => ({ ...prev, [key]: value })) }
+
+  function updateManager(index: number, name: string) {
+    setForm((prev) => ({
+      ...prev,
+      managers: prev.managers.map((manager, managerIndex) =>
+        managerIndex === index
+          ? { ...manager, name, avatar: getInitials(name) || manager.avatar }
+          : manager
+      ),
+    }))
+  }
+
+  function addManager() {
+    setForm((prev) => ({
+      ...prev,
+      managers: [
+        ...prev.managers,
+        {
+          id: Date.now(),
+          name: "",
+          avatar: "",
+          color: "#4f8ef7",
+        },
+      ],
+    }))
+  }
+
+  function removeManager(index: number) {
+    setForm((prev) => ({
+      ...prev,
+      managers: prev.managers.filter((_, managerIndex) => managerIndex !== index),
+    }))
+  }
+
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={(e) => e.stopPropagation()}>
@@ -239,6 +274,21 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
             <input type="range" min={0} max={100} value={form.progress} onChange={(e) => set("progress", Number(e.target.value))} style={{ width: "100%", accentColor: "#4f8ef7" }} />
           </Field>
           <Field label="วันที่เริ่ม"><Input type="date" value={form.startDate} onChange={(v) => set("startDate", v)} /></Field>
+          <SLabel label="ผู้ดูแลโปรเจค" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {form.managers.map((manager, index) => (
+              <div key={`${manager.id}-${index}`} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  value={manager.name}
+                  onChange={(e) => updateManager(index, e.target.value)}
+                  placeholder="ชื่อผู้ดูแล"
+                  style={S.input}
+                />
+                <button onClick={() => removeManager(index)} style={S.removeBtn}>ลบ</button>
+              </div>
+            ))}
+            <button onClick={addManager} style={S.addManagerBtn}>+ เพิ่มผู้ดูแล</button>
+          </div>
           <SLabel label="ข้อมูลเทคนิค" />
           <Field label="แพ็กเกจ">
             <select value={form.package} onChange={(e) => set("package", e.target.value)} style={S.input}>
@@ -270,6 +320,15 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
   return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={S.input} />
 }
 
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() || "")
+    .join("")
+}
+
 const S: Record<string, React.CSSProperties> = {
   page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
@@ -294,6 +353,8 @@ const S: Record<string, React.CSSProperties> = {
   metaLabel: { fontSize: 11, color: "#4b5563", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em" },
   metaValue: { fontSize: 13, color: "#d1d5db", fontWeight: 600 },
   editBtn: { background: "#1f2937", border: "1px solid #374151", borderRadius: 7, color: "#9ca3af", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" },
+  addManagerBtn: { background: "#1f2937", border: "1px solid #374151", borderRadius: 8, color: "#4f8ef7", fontSize: 12, fontWeight: 600, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start" },
+  removeBtn: { background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#f87171", fontSize: 12, fontWeight: 600, padding: "8px 10px", cursor: "pointer" },
   empty: { color: "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
   modal: { background: "#111827", border: "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
