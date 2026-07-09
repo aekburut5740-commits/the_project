@@ -687,3 +687,38 @@ export async function getWebhooks() {
   )
   return result.rows
 }
+// ===== SETTINGS =====
+
+// แก้ไขโปรไฟล์
+export async function updateProfile(user_id: number, username: string, email: string) {
+  const result = await db.query(
+    `UPDATE users 
+     SET username = $1, email = $2 
+     WHERE id = $3 
+     RETURNING id, username, email, role`,
+    [username, email, user_id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบผู้ใช้งาน")
+  return result.rows[0]
+}
+
+// เปลี่ยนรหัสผ่าน
+export async function changePassword(user_id: number, old_password: string, new_password: string) {
+  // ดึงรหัสผ่านเดิมมาเช็คก่อน
+  const result = await db.query(
+    `SELECT * FROM users WHERE id = $1`,
+    [user_id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบผู้ใช้งาน")
+  
+  const user = result.rows[0]
+  const isMatch = await bcrypt.compare(old_password, user.password)
+  if (!isMatch) throw new Error("รหัสผ่านเดิมไม่ถูกต้อง")
+  
+  const hashed = await bcrypt.hash(new_password, 10)
+  await db.query(
+    `UPDATE users SET password = $1 WHERE id = $2`,
+    [hashed, user_id]
+  )
+  return { message: "เปลี่ยนรหัสผ่านสำเร็จ" }
+}

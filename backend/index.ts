@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks } from "../database/route"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks,updateProfile, changePassword } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -544,7 +544,39 @@ new Elysia()
     if (set.status === 401) return result
     return getWebhooks()
   })
-  
+  // แก้ไขโปรไฟล์
+  .put("/api/profile", async ({ headers, set, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { username, email } = body as any
+    if (!username || !email) {
+      set.status = 400
+      return { message: "กรุณากรอกชื่อผู้ใช้และอีเมล" }
+    }
+    try {
+      return await updateProfile(result.id, username, email)
+    } catch (err: any) {
+      set.status = 400
+      return { message: err.message }
+    }
+  })
+
+  // เปลี่ยนรหัสผ่าน
+  .put("/api/profile/password", async ({ headers, set, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { old_password, new_password } = body as any
+    if (!old_password || !new_password) {
+      set.status = 400
+      return { message: "กรุณากรอกรหัสผ่านให้ครบ" }
+    }
+    try {
+      return await changePassword(result.id, old_password, new_password)
+    } catch (err: any) {
+      set.status = 400
+      return { message: err.message }
+    }
+  })
   
   .listen(4000)
 
