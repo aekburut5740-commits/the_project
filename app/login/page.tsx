@@ -116,6 +116,9 @@ export default function LoginPage() {
             >
               Login
             </button>
+            <div className="mt-4 text-center">
+              <a href="/createaccoute" className="text-sm font-medium text-indigo-600 hover:underline">ยังไม่มีบัญชี? สร้างบัญชีใหม่</a>
+            </div>
           </div>
         </div>
       </div>

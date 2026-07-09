@@ -53,7 +53,7 @@ export default function Sidebar() {
   const initials = username.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
 
   return (
-    <aside className="w-56 bg-black text-white flex flex-col h-full">
+    <aside className="w-56 bg-black text-white flex flex-col h-full print:hidden">
       <nav className="flex-1 px-3 pt-4 space-y-0.5">
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = pathname === href;

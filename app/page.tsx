@@ -36,7 +36,7 @@ export default function Home() {
                 เริ่มใช้งาน / เข้าสู่ระบบ
               </a>
               <a
-                href="/dashboard"
+                href="/createaccoute"
                 className="inline-flex items-center justify-center rounded-full border border-slate-600 bg-slate-900/80 px-8 py-4 text-base font-semibold text-slate-100 transition hover:border-slate-400 hover:bg-slate-800"
               >
                 สร้างบัญชีใหม่
