@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks,updateProfile, changePassword } from "../database/route"
+import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks,updateProfile, changePassword,getProjectMembers, addProjectMember, removeProjectMember } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -66,8 +66,8 @@ new Elysia()
   .post("/api/projects", async ({ headers, set, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-    const { name, description } = body as any
-    const project = await createProject(name, description, result.id)
+    const { name, description, domain, start_date, package: package_name, token } = body as any
+    const project = await createProject(name, description, result.id, domain, start_date, package_name, token)
     await createLog(result.id, project.id, `สร้างโปรเจค "${name}"`)
     return project
   })
@@ -118,9 +118,9 @@ new Elysia()
   .put("/api/projects/:id", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-    const { name, description } = body as any
+    const { name, description, domain, start_date, package: package_name, token } = body as any
     try {
-      return await updateProject(Number(params.id), name, description, result.id)
+      return await updateProject(Number(params.id), name, description, result.id, domain, start_date, package_name, token)
     } catch (err: any) {
       set.status = 403
       return { message: err.message }
@@ -574,6 +574,45 @@ new Elysia()
       return await changePassword(result.id, old_password, new_password)
     } catch (err: any) {
       set.status = 400
+      return { message: err.message }
+    }
+  })
+
+  // ดูผู้ดูแลโปรเจค
+  .get("/api/projects/:id/members", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getProjectMembers(Number(params.id))
+  })
+
+  // Admin: เพิ่มผู้ดูแลโปรเจค
+  .post("/api/projects/:id/members", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { name, role } = body as any
+    if (!name) {
+      set.status = 400
+      return { message: "กรุณาใส่ชื่อผู้ดูแล" }
+    }
+    return addProjectMember(Number(params.id), name, role || "ผู้ดูแลโปรเจค")
+  })
+
+  // Admin: ลบผู้ดูแลโปรเจค
+  .delete("/api/members/:id", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    try {
+      return await removeProjectMember(Number(params.id))
+    } catch (err: any) {
+      set.status = 404
       return { message: err.message }
     }
   })

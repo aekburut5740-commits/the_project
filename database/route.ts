@@ -51,10 +51,19 @@ export async function getProjects(user_id: number) {
   return result.rows
 }
 
-export async function createProject(name: string, description: string, user_id: number) {
+export async function createProject(
+  name: string,
+  description: string,
+  user_id: number,
+  domain?: string,
+  start_date?: string,
+  package_name?: string,
+  token?: string
+) {
   const result = await db.query(
-    "INSERT INTO projects (name, description, user_id) VALUES ($1, $2, $3) RETURNING *",
-    [name, description, user_id]
+    `INSERT INTO projects (name, description, user_id, domain, start_date, package, token) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [name, description, user_id, domain || null, start_date || null, package_name || null, token || null]
   )
   return result.rows[0]
 }
@@ -90,14 +99,19 @@ export async function updateProject(
   id: number,
   name: string,
   description: string,
-  user_id: number
+  user_id: number,
+  domain?: string,
+  start_date?: string,
+  package_name?: string,
+  token?: string
 ) {
   const result = await db.query(
     `UPDATE projects 
-     SET name = $1, description = $2 
-     WHERE id = $3 AND user_id = $4 
+     SET name = $1, description = $2, domain = $3, 
+         start_date = $4, package = $5, token = $6
+     WHERE id = $7 AND user_id = $8 
      RETURNING *`,
-    [name, description, id, user_id]
+    [name, description, domain || null, start_date || null, package_name || null, token || null, id, user_id]
   )
   if (!result.rows.length) {
     throw new Error("ไม่พบโปรเจคหรือไม่มีสิทธิ์แก้ไข")
@@ -721,4 +735,37 @@ export async function changePassword(user_id: number, old_password: string, new_
     [hashed, user_id]
   )
   return { message: "เปลี่ยนรหัสผ่านสำเร็จ" }
+}
+
+// ===== PROJECT MEMBERS =====
+
+// ดูผู้ดูแลโปรเจค
+export async function getProjectMembers(project_id: number) {
+  const result = await db.query(
+    `SELECT * FROM project_members 
+     WHERE project_id = $1 
+     ORDER BY created_at ASC`,
+    [project_id]
+  )
+  return result.rows
+}
+
+// เพิ่มผู้ดูแลโปรเจค
+export async function addProjectMember(project_id: number, name: string, role: string) {
+  const result = await db.query(
+    `INSERT INTO project_members (project_id, name, role) 
+     VALUES ($1, $2, $3) RETURNING *`,
+    [project_id, name, role]
+  )
+  return result.rows[0]
+}
+
+// ลบผู้ดูแลโปรเจค
+export async function removeProjectMember(id: number) {
+  const result = await db.query(
+    `DELETE FROM project_members WHERE id = $1 RETURNING *`,
+    [id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบผู้ดูแล")
+  return result.rows[0]
 }
