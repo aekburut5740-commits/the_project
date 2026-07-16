@@ -9,11 +9,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
 
-  const handleSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    console.log({ username, email, password, remember });
-    // TODO: เพิ่ม logic การเรียก API ที่นี่
-  };
+ const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.preventDefault()
+  try {
+    const res = await fetch('http://localhost:4000/api/login', {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json()
+    if (data.token) {
+      localStorage.setItem('token', data.token)
+      window.location.href = '/dashboard'
+    }
+  } catch (error) {
+    console.error("Error occurred while logging in:", error);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
