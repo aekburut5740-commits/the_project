@@ -1,39 +1,30 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { Plus, Flag, Calendar, ChevronRight, Check, Clock, AlertCircle } from "lucide-react"
 import {
-  MOCK_PROJECTS, MILESTONE_STATUS_CONFIG,
-  type Milestone, type MilestoneStatus, type Project,
+  MOCK_CURRENT_USER, MOCK_PROJECTS, MOCK_MILESTONES, MILESTONE_STATUS_CONFIG,
+  type Milestone, type MilestoneStatus,
 } from "@/lib/mockData"
 import { useNotifications } from "@/lib/notificationStore"
-import { getUser } from "@/lib/auth"
-import { backend, normalizeMilestone, normalizeProject } from "@/lib/backend"
 
 export default function MilestonesPage() {
-  const user = getUser()
-  const isAdmin = user?.role === "admin"
+  const user = MOCK_CURRENT_USER
+  const isAdmin = user.role === "admin"
   const { addNotif } = useNotifications()
-  const [projects, setProjects] = useState<Project[]>([])
-  const myProjectIds = useMemo(() => projects.map((p) => p.id), [projects])
-  const [milestones, setMilestones] = useState<Milestone[]>([])
-  const [error, setError] = useState("")
+
+  const myProjectIds = useMemo(() =>
+    isAdmin ? MOCK_PROJECTS.map((p) => p.id)
+            : MOCK_PROJECTS.filter((p) => p.ownerId === user.id).map((p) => p.id),
+    [isAdmin, user.id]
+  )
+
+  const [milestones, setMilestones] = useState<Milestone[]>(
+    MOCK_MILESTONES.filter((m) => myProjectIds.includes(m.projectId))
+  )
   const [filterStatus, setFilterStatus] = useState<MilestoneStatus | "all">("all")
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null)
   const [isCreating, setIsCreating] = useState(false)
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await backend.projects(isAdmin)
-        const nextProjects = data.map((p: any) => normalizeProject(p))
-        setProjects(nextProjects)
-        const groups = await Promise.all(nextProjects.map((p) => backend.milestones(p.id)))
-        setMilestones(groups.flat().map(normalizeMilestone))
-      } catch (err) { setError(err instanceof Error ? err.message : "ไม่สามารถโหลด Milestone ได้") }
-    }
-    load()
-  }, [isAdmin])
 
   const filtered = filterStatus === "all" ? milestones : milestones.filter((m) => m.status === filterStatus)
 
@@ -45,16 +36,15 @@ export default function MilestonesPage() {
   }
 
   function getProjectOwnerId(projectId: number): number {
-    return projects.find((p) => p.id === projectId)?.ownerId ?? 0
+    return MOCK_PROJECTS.find((p) => p.id === projectId)?.ownerId ?? 0
   }
 
-  async function handleSave(updated: Milestone) {
+  function handleSave(updated: Milestone) {
     const ownerId = getProjectOwnerId(updated.projectId)
-    const proj = projects.find((p) => p.id === updated.projectId)
+    const proj = MOCK_PROJECTS.find((p) => p.id === updated.projectId)
 
-    try { if (isCreating) {
-      const created = normalizeMilestone(await backend.createMilestone(updated.projectId, { title: updated.title, description: updated.description, status: updated.status, progress: updated.progress, end_date: updated.dueDate }))
-      setMilestones((prev) => [...prev, created])
+    if (isCreating) {
+      setMilestones((prev) => [...prev, { ...updated, id: Date.now() }])
       addNotif({
         type: "milestone",
         title: "Milestone ใหม่ถูกสร้าง",
@@ -63,8 +53,7 @@ export default function MilestonesPage() {
       })
     } else {
       const old = milestones.find((m) => m.id === updated.id)
-      const saved = normalizeMilestone(await backend.updateMilestone(updated.id, { title: updated.title, description: updated.description, status: updated.status, progress: updated.progress, end_date: updated.dueDate }))
-      setMilestones((prev) => prev.map((m) => m.id === updated.id ? saved : m))
+      setMilestones((prev) => prev.map((m) => m.id === updated.id ? updated : m))
       addNotif({
         type: "milestone",
         title: "Milestone อัปเดตแล้ว",
@@ -74,13 +63,12 @@ export default function MilestonesPage() {
     }
     setEditingMilestone(null)
     setIsCreating(false)
-    } catch (err) { setError(err instanceof Error ? err.message : "บันทึก Milestone ไม่สำเร็จ") }
   }
 
-  async function handleDelete(id: number) {
+  function handleDelete(id: number) {
     const m = milestones.find((x) => x.id === id)
     const ownerId = m ? getProjectOwnerId(m.projectId) : 0
-    try { await backend.deleteMilestone(id); setMilestones((prev) => prev.filter((x) => x.id !== id))
+    setMilestones((prev) => prev.filter((x) => x.id !== id))
     if (m) {
       addNotif({
         type: "milestone",
@@ -90,7 +78,6 @@ export default function MilestonesPage() {
       })
     }
     setEditingMilestone(null)
-    } catch (err) { setError(err instanceof Error ? err.message : "ลบ Milestone ไม่สำเร็จ") }
   }
 
   function openCreate() {
@@ -110,8 +97,6 @@ export default function MilestonesPage() {
         </div>
         {isAdmin && <button onClick={openCreate} style={S.addBtn}><Plus size={15} /> เพิ่ม Milestone</button>}
       </div>
-
-      {error && <div style={{ color: "#f87171", marginBottom: 12 }}>{error}</div>}
 
       <div style={{ marginBottom: 20 }}>
         <span style={{ ...S.roleBadge, background: isAdmin ? "#4f8ef722" : "#34d39922", color: isAdmin ? "#4f8ef7" : "#34d399", border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}` }}>
@@ -145,7 +130,7 @@ export default function MilestonesPage() {
       {filtered.length === 0 ? <div style={S.empty}>ไม่พบ milestone</div> : (
         <div style={S.list}>
           {filtered.map((m) => (
-            <MilestoneCard key={m.id} milestone={m} projectName={projects.find((p) => p.id === m.projectId)?.name} isAdmin={isAdmin}
+            <MilestoneCard key={m.id} milestone={m} isAdmin={isAdmin}
               onEdit={() => { setIsCreating(false); setEditingMilestone(m) }} />
           ))}
         </div>
@@ -160,8 +145,9 @@ export default function MilestonesPage() {
   )
 }
 
-function MilestoneCard({ milestone: m, projectName, isAdmin, onEdit }: { milestone: Milestone; projectName?: string; isAdmin: boolean; onEdit: () => void }) {
+function MilestoneCard({ milestone: m, isAdmin, onEdit }: { milestone: Milestone; isAdmin: boolean; onEdit: () => void }) {
   const { color, label } = MILESTONE_STATUS_CONFIG[m.status]
+  const project = MOCK_PROJECTS.find((p) => p.id === m.projectId)
   const doneTasks = m.tasks.filter((t) => t.done).length
   const StatusIcon = m.status === "completed" ? Check : m.status === "overdue" ? AlertCircle : m.status === "in_progress" ? ChevronRight : Clock
   return (
@@ -174,7 +160,7 @@ function MilestoneCard({ milestone: m, projectName, isAdmin, onEdit }: { milesto
               <Flag size={13} color={color} />
               <span style={S.cardTitle}>{m.title}</span>
             </div>
-            <span style={{ fontSize: 12, color: "#6b7280" }}>{projectName}</span>
+            <span style={{ fontSize: 12, color: "#6b7280" }}>{project?.name}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44`, display: "flex", alignItems: "center", gap: 4 }}>

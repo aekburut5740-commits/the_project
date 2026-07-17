@@ -1,5 +1,6 @@
 "use client"
 
+<<<<<<< HEAD
 import { useState, useMemo, useRef, useEffect } from "react"
 import { FileText, FileImage, File, Download, Trash2, Upload, Search, FolderOpen, Eye, Lock } from "lucide-react"
 import {
@@ -57,6 +58,35 @@ export default function DocumentVaultPage() {
     const matchCategory = filterCategory === "all" || d.category === filterCategory
     return matchSearch && matchProject && matchCategory
   })
+=======
+import { useState, useMemo } from "react"
+import { MessageSquare, Plus, Send } from "lucide-react"
+import {
+  MOCK_CURRENT_USER, MOCK_PROJECTS, MOCK_FEEDBACKS,
+  FEEDBACK_STATUS_CONFIG, FEEDBACK_PRIORITY_CONFIG,
+  type Feedback, type FeedbackStatus, type FeedbackPriority, type FeedbackComment,
+} from "@/lib/mockData"
+import { useNotifications } from "@/lib/notificationStore"
+
+export default function FeedbackPage() {
+  const user = MOCK_CURRENT_USER
+  const isAdmin = user.role === "admin"
+  const { addNotif } = useNotifications()
+
+  const baseFeedbacks = useMemo(() =>
+    isAdmin ? MOCK_FEEDBACKS : MOCK_FEEDBACKS.filter((f) => f.authorId === user.id),
+    [isAdmin, user.id]
+  )
+
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>(baseFeedbacks)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<FeedbackStatus | "all">("all")
+
+  const selected = feedbacks.find((f) => f.id === selectedId) ?? null
+  const filtered = feedbacks.filter((f) => filterStatus === "all" || f.status === filterStatus)
+  const unreadCount = isAdmin ? feedbacks.filter((f) => !f.isRead).length : 0
+>>>>>>> 7d52655cf9627dd630f089b662c44d7c1fc8e2b2
 
   // Group by project
   const grouped = myProjects.reduce<Record<number, Document[]>>((acc, proj) => {
@@ -65,18 +95,67 @@ export default function DocumentVaultPage() {
     return acc
   }, {})
 
+<<<<<<< HEAD
   async function handleUpload(newDoc: Omit<Document, "id">, file: File) {
     try { const saved = normalizeDocument(await backend.uploadFile(newDoc.projectId, file))
     setDocs((prev) => [...prev, saved])
     const proj = projects.find((p) => p.id === newDoc.projectId)
+=======
+  function handleCreate(data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) {
+    const proj = MOCK_PROJECTS.find((p) => p.id === data.projectId)
+    const newFeedback: Feedback = {
+      id: Date.now(), ...data,
+      authorId: user.id, authorName: user.username,
+      status: "sent", createdAt: new Date(), updatedAt: new Date(),
+      isRead: false, comments: [],
+    }
+    setFeedbacks((prev) => [newFeedback, ...prev])
+>>>>>>> 7d52655cf9627dd630f089b662c44d7c1fc8e2b2
     addNotif({
       type: "document",
       title: "อัปโหลดเอกสารใหม่",
       message: `Admin อัปโหลด ${newDoc.name} ใน ${proj?.name}`,
       forUserId: proj?.ownerId ?? "all",
     })
+<<<<<<< HEAD
     setShowUpload(false)
     } catch (err) { setError(err instanceof Error ? err.message : "อัปโหลดเอกสารไม่สำเร็จ") }
+=======
+    setShowCreate(false)
+  }
+
+  function handleStatusChange(feedbackId: number, status: FeedbackStatus) {
+    const f = feedbacks.find((x) => x.id === feedbackId)
+    setFeedbacks((prev) => prev.map((x) => x.id === feedbackId ? { ...x, status, updatedAt: new Date() } : x))
+    if (f) {
+      addNotif({
+        type: "feedback",
+        title: "สถานะ Feedback เปลี่ยนแปลง",
+        message: `"${f.title}" → ${FEEDBACK_STATUS_CONFIG[status].label}`,
+        forUserId: f.authorId,
+      })
+    }
+  }
+
+  function handleComment(feedbackId: number, message: string) {
+    const comment: FeedbackComment = {
+      id: Date.now(), authorId: user.id,
+      authorName: user.username, authorRole: user.role,
+      message, createdAt: new Date(),
+    }
+    const f = feedbacks.find((x) => x.id === feedbackId)
+    setFeedbacks((prev) => prev.map((x) =>
+      x.id === feedbackId ? { ...x, comments: [...x.comments, comment], updatedAt: new Date() } : x
+    ))
+    if (isAdmin && f) {
+      addNotif({
+        type: "feedback",
+        title: "Admin ตอบกลับ Feedback",
+        message: `Admin ตอบกลับ "${f.title}"`,
+        forUserId: f.authorId,
+      })
+    }
+>>>>>>> 7d52655cf9627dd630f089b662c44d7c1fc8e2b2
   }
 
   return (
@@ -92,7 +171,6 @@ export default function DocumentVaultPage() {
           </button>
         )}
       </div>
-      {error && <div style={{ color: "#f87171", marginBottom: 12 }}>{error}</div>}
 
       {/* Role badge */}
       <div style={{ marginBottom: 20 }}>
@@ -106,6 +184,7 @@ export default function DocumentVaultPage() {
         </span>
       </div>
 
+<<<<<<< HEAD
       {/* Category stats */}
       <div style={S.statsRow}>
         {(Object.keys(CATEGORY_CONFIG) as DocCategory[]).map((cat) => {
@@ -176,11 +255,100 @@ export default function DocumentVaultPage() {
       )}
       {previewDoc && (
         <PreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+=======
+      {/* 2-column layout */}
+      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 14, height: "calc(100vh - 230px)" }}>
+
+        {/* Left panel */}
+        <div style={S.listPanel}>
+          {/* Filter tabs */}
+          <div style={{ display: "flex", gap: 2, padding: "10px 10px 0", flexWrap: "wrap" }}>
+            {(["all", "sent", "in_progress", "resolved"] as const).map((s) => (
+              <button key={s} onClick={() => setFilterStatus(s)}
+                style={{ ...S.tabBtn, background: filterStatus === s ? "#1f2937" : "transparent", color: filterStatus === s ? "#f9fafb" : "#6b7280" }}>
+                {s === "all" ? "ทั้งหมด" : FEEDBACK_STATUS_CONFIG[s].label}
+              </button>
+            ))}
+          </div>
+
+          {/* List */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 8 }}>
+            {filtered.length === 0 ? (
+              <div style={S.empty}>ไม่มี feedback</div>
+            ) : filtered.map((f) => {
+              const { color } = FEEDBACK_STATUS_CONFIG[f.status]
+              const { color: pColor } = FEEDBACK_PRIORITY_CONFIG[f.priority]
+              const proj = MOCK_PROJECTS.find((p) => p.id === f.projectId)
+              const isSelected = selectedId === f.id
+              return (
+                <div key={f.id} onClick={() => handleSelect(f.id)}
+                  style={{
+                    ...S.feedbackItem,
+                    background: isSelected ? "#1e3a5f" : "#0d1117",
+                    borderColor: isSelected ? "#4f8ef7" : "#1f2937",
+                    borderLeftColor: color,
+                  }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: isAdmin && !f.isRead ? 700 : 500, color: "#f9fafb", flex: 1, lineHeight: 1.4 }}>
+                      {f.title}
+                    </span>
+                    {isAdmin && !f.isRead && <span style={S.unreadDot} />}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>{proj?.name}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                    <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>
+                      {FEEDBACK_STATUS_CONFIG[f.status].label}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ ...S.badge, background: pColor + "22", color: pColor, border: `1px solid ${pColor}44` }}>
+                        {FEEDBACK_PRIORITY_CONFIG[f.priority].label}
+                      </span>
+                      {f.comments.length > 0 && (
+                        <span style={{ fontSize: 10, color: "#4b5563" }}>💬 {f.comments.length}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Right panel */}
+        <div style={S.detailPanel}>
+          {!selected ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
+              <MessageSquare size={40} color="#1f2937" />
+              <div style={{ fontSize: 13, color: "#374151" }}>เลือก feedback เพื่อดูรายละเอียด</div>
+            </div>
+          ) : (
+            <FeedbackDetail
+              feedback={selected}
+              isAdmin={isAdmin}
+              currentUserId={user.id}
+              currentUsername={user.username}
+              currentRole={user.role}
+              onStatusChange={handleStatusChange}
+              onComment={handleComment}
+            />
+          )}
+        </div>
+      </div>
+
+      {showCreate && (
+        <CreateModal
+          userId={user.id}
+          isAdmin={isAdmin}
+          onClose={() => setShowCreate(false)}
+          onCreate={handleCreate}
+        />
+>>>>>>> 7d52655cf9627dd630f089b662c44d7c1fc8e2b2
       )}
     </div>
   )
 }
 
+<<<<<<< HEAD
 function DocCard({ doc, isAdmin, onPreview, onDelete }: {
   doc: Document; isAdmin: boolean; onPreview: () => void; onDelete: () => void
 }) {
@@ -192,6 +360,71 @@ function DocCard({ doc, isAdmin, onPreview, onDelete }: {
         <div style={{ ...S.fileIcon, background: color + "22", color }}><FileIcon size={20} /></div>
         {doc.isConfidential && (
           <div style={S.confBadge}><Lock size={9} /><span>ลับ</span></div>
+=======
+// ─── Feedback Detail ──────────────────────────────────────────────────────────
+
+function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, currentRole, onStatusChange, onComment }: {
+  feedback: Feedback
+  isAdmin: boolean
+  currentUserId: number
+  currentUsername: string
+  currentRole: "admin" | "customer"
+  onStatusChange: (id: number, status: FeedbackStatus) => void
+  onComment: (id: number, message: string) => void
+}) {
+  const [newComment, setNewComment] = useState("")
+  const proj = MOCK_PROJECTS.find((p) => p.id === f.projectId)
+  const { color: sColor, label: sLabel } = FEEDBACK_STATUS_CONFIG[f.status]
+  const { color: pColor, label: pLabel } = FEEDBACK_PRIORITY_CONFIG[f.priority]
+
+  function submit() {
+    if (!newComment.trim()) return
+    onComment(f.id, newComment.trim())
+    setNewComment("")
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Detail header */}
+      <div style={{ padding: "20px 24px", borderBottom: "1px solid #1f2937", flexShrink: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#f9fafb", marginBottom: 4 }}>{f.title}</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
+              โดย {f.authorName} · {proj?.name} · {f.createdAt.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+            <span style={{ ...S.badge, background: pColor + "22", color: pColor, border: `1px solid ${pColor}44` }}>
+              ⚡ {pLabel}
+            </span>
+            {isAdmin ? (
+              <select value={f.status}
+                onChange={(e) => onStatusChange(f.id, e.target.value as FeedbackStatus)}
+                style={{ background: sColor + "22", color: sColor, border: `1px solid ${sColor}44`, borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}>
+                <option value="sent">ส่งถึงแล้ว</option>
+                <option value="in_progress">กำลังดำเนินการ</option>
+                <option value="resolved">เสร็จสิ้น</option>
+              </select>
+            ) : (
+              <span style={{ ...S.badge, background: sColor + "22", color: sColor, border: `1px solid ${sColor}44` }}>
+                {sLabel}
+              </span>
+            )}
+          </div>
+        </div>
+        <p style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: 0, background: "#0d1117", borderRadius: 8, padding: "12px 14px" }}>
+          {f.description}
+        </p>
+      </div>
+
+      {/* Comments */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+        {f.comments.length === 0 && (
+          <div style={{ color: "#374151", fontSize: 13, textAlign: "center", padding: "32px 0", fontStyle: "italic" }}>
+            ยังไม่มีความคิดเห็น — เริ่มการสนทนาได้เลย
+          </div>
+>>>>>>> 7d52655cf9627dd630f089b662c44d7c1fc8e2b2
         )}
       </div>
       <div style={S.docName} title={doc.name}>{doc.name}</div>
@@ -214,6 +447,7 @@ function DocCard({ doc, isAdmin, onPreview, onDelete }: {
   )
 }
 
+<<<<<<< HEAD
 function UploadModal({ projectIds, onClose, onUpload }: {
   projectIds: number[]; onClose: () => void; onUpload: (d: Omit<Document, "id">, file: File) => void
 }) {
@@ -228,6 +462,24 @@ function UploadModal({ projectIds, onClose, onUpload }: {
     if (["doc","docx","txt","md"].includes(ext||"")) return "doc"
     return "other"
   }
+=======
+// ─── Create Modal ─────────────────────────────────────────────────────────────
+
+function CreateModal({ userId, isAdmin, onClose, onCreate }: {
+  userId: number
+  isAdmin: boolean
+  onClose: () => void
+  onCreate: (data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) => void
+}) {
+  const myProjects = MOCK_PROJECTS.filter((p) => isAdmin || p.ownerId === userId)
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    projectId: myProjects[0]?.id ?? 0,
+    priority: "medium" as FeedbackPriority,
+  })
+  const canSubmit = form.title.trim() && form.description.trim()
+>>>>>>> 7d52655cf9627dd630f089b662c44d7c1fc8e2b2
 
   return (
     <div style={S.overlay} onClick={onClose}>
