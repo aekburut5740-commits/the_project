@@ -1,5 +1,5 @@
 
-import { register, login, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks,updateProfile, changePassword,getProjectMembers, addProjectMember, removeProjectMember } from "../database/route"
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks,updateProfile, changePassword,getProjectMembers, addProjectMember, removeProjectMember } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -51,10 +51,10 @@ new Elysia()
     }
   })
 
-  .get("/api/profile", ({ headers, set }) => {
+  .get("/api/profile", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-    return { message: "ยินดีต้อนรับ!", user: result }
+    return { message: "ยินดีต้อนรับ!", user: await getProfile(result.id) }
   })
 
   .get("/api/projects", ({ headers, set }) => {
@@ -474,12 +474,14 @@ new Elysia()
         return { message: "ไม่สามารถดึงข้อมูลจาก GitHub ได้" }
       }
       const commits = await response.json() as any[]
-      return commits.slice(0, 10).map((c: any) => ({
+      const recentCommits = commits.slice(0, 10).map((c: any) => ({
+        id: c.sha,
         message: c.commit.message,
         author: c.commit.author.name,
         date: c.commit.author.date,
         url: c.html_url
       }))
+      return { repo: "aekburut5740-commits/the_project", commits: recentCommits }
     } catch (err: any) {
       set.status = 500
       return { message: "เกิดข้อผิดพลาด" }

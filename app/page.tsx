@@ -1,100 +1,178 @@
-import Image from "next/image"
+"use client";
 
-export default function Home() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-slate-100">
-      <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-6 py-20 sm:px-8">
-        <div className="grid gap-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 shadow-lg shadow-black/20">
-                <Image
-                  src="/logo.jpg"
-                  alt="Logo"
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 rounded-full object-cover"
-                />
-              </div>
-              <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Welcome to Your Project Hub</p>
-            </div>
-            <div className="space-y-4">
-              <h1 className="max-w-3xl text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
-                CRM PROJECTS
-              </h1>
-            </div>
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
-            <p className="max-w-2xl text-lg leading-8 text-slate-300">
-              ระบบสำหรับจัดการโปรเจกต์ ดูแลทีม และติดตามงานได้สะดวกขึ้น ไม่ว่าจะเป็นผู้ใช้งานทั่วไปหรือ admin ก็เริ่มงานได้ทันทีจากหน้าหลักนี้
-            </p>
+export default function CreateAccountPage() {
+	const router = useRouter();
+	const [showPassword, setShowPassword] = useState(false);
+	const [username, setUsername] = useState("");
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [loading, setLoading] = useState(false);
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <a
-                href="/login"
-                className="inline-flex items-center justify-center rounded-full bg-sky-500 px-8 py-4 text-base font-semibold text-slate-950 transition hover:bg-sky-400"
-              >
-                เริ่มใช้งาน / เข้าสู่ระบบ
-              </a>
-              <a
-                href="/createaccoute"
-                className="inline-flex items-center justify-center rounded-full border border-slate-600 bg-slate-900/80 px-8 py-4 text-base font-semibold text-slate-100 transition hover:border-slate-400 hover:bg-slate-800"
-              >
-                สร้างบัญชีใหม่
-              </a>
-            </div>
+	const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
+		e.preventDefault();
+		setError(null);
+		if (password !== confirmPassword) {
+			setError("รหัสผ่านกับยืนยันรหัสผ่านไม่ตรงกัน");
+			return;
+		}
+		if (!username || !email || !password) {
+			setError("กรุณากรอกข้อมูลให้ครบทุกช่อง");
+			return;
+		}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl border border-slate-700 bg-slate-950/60 p-6">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">คุณสมบัติเด่น</h2>
-                <ul className="mt-4 space-y-3 text-sm text-slate-300">
-                  <li>• ติดตามความคืบหน้าโปรเจกต์แบบเรียลไทม์</li>
-                  <li>• กำหนดผู้ดูแลและจัดการทีมได้ง่าย</li>
-                </ul>
-              </div>
-              <div className="rounded-3xl border border-slate-700 bg-slate-950/60 p-6">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">ออกแบบมาให้</h2>
-                <ul className="mt-4 space-y-3 text-sm text-slate-300">
-                  <li>• หน้าแรกโล่งให้ใส่รูปโลโก้หรือภาพใหญ่ได้</li>
-                  <li>• มี CTA ชัดเจนทั้งสำหรับผู้ใช้และ admin</li>
-                </ul>
-              </div>
-            </div>
-          </div>
+		setLoading(true);
+		try {
+			const data = await apiFetch("/api/register", {
+				method: "POST",
+				body: JSON.stringify({ username, email, password })
+			});
+			if (!data.user) throw new Error(data.message || "ไม่สามารถสร้างบัญชีได้");
+			router.push("/login");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "ไม่สามารถสร้างบัญชีได้");
+		} finally {
+			setLoading(false);
+		}
+	};
 
-          <div className="relative overflow-hidden rounded-[2rem] border border-slate-700 bg-slate-950/50 p-8 shadow-2xl shadow-black/40">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(56,189,248,0.25),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(168,85,247,0.2),_transparent_30%)]" />
-            <div className="relative flex h-full flex-col justify-between gap-6">
-              <div className="rounded-[1.5rem] border border-slate-800 bg-slate-900/90 p-6 shadow-inner shadow-slate-950/30">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-sky-300">ตัวอย่างภาพ</p>
-                    <p className="mt-2 text-xl font-semibold text-white">ตัวอย่างผลงานล่าสุด</p>
-                  </div>
-                  <div className="h-12 w-12 rounded-3xl bg-slate-800/80" />
-                </div>
-                <div className="mt-6 h-52 overflow-hidden rounded-3xl bg-slate-800/70">
-                  <Image
-                    src="/show.png"
-                    alt="ภาพหน้าหลัก"
-                    width={900}
-                    height={520}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              </div>
+	return (
+		<div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+			<div className="w-full max-w-2xl flex rounded-2xl overflow-hidden shadow-lg border border-gray-200">
+				<div className="flex-1 bg-white px-8 py-10 flex flex-col justify-center">
+					<div className="mb-8">
+						<h1 className="text-2xl font-semibold text-gray-900 tracking-tight mb-1">Create Account</h1>
+						<p className="text-sm text-gray-500">สร้างบัญชีใหม่เพื่อเข้าใช้งาน</p>
+					</div>
 
-              <div className="rounded-[1.5rem] border border-slate-800 bg-slate-900/90 p-6 shadow-inner shadow-slate-950/20">
-                <p className="text-sm font-semibold text-slate-300">บางอย่างที่น่าสนใจ</p>
-                <div className="mt-4 grid gap-4 text-slate-300 sm:grid-cols-2">
-                  <div className="rounded-3xl bg-slate-950/60 p-4">แดชบอร์ดโปรเจกต์</div>
-                  <div className="rounded-3xl bg-slate-950/60 p-4">จัดการทีมได้ง่าย</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  )
+					<div className="space-y-5">
+						<div>
+							<label className="block text-sm font-medium text-gray-600 mb-1.5">Username</label>
+							<div className="relative">
+								<span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><UserIcon /></span>
+								<input
+									type="text"
+									value={username}
+									onChange={(e) => setUsername(e.target.value)}
+									placeholder="username"
+									className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+								/>
+							</div>
+						</div>
+
+						<div>
+							<label className="block text-sm font-medium text-gray-600 mb-1.5">Email</label>
+							<div className="relative">
+								<span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><MailIcon /></span>
+								<input
+									type="email"
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									placeholder="yourname@email.com"
+									className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+								/>
+							</div>
+						</div>
+
+						<div>
+							<label className="block text-sm font-medium text-gray-600 mb-1.5">Password</label>
+							<div className="relative">
+								<span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><LockIcon /></span>
+								<input
+									type={showPassword ? "text" : "password"}
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									placeholder="••••••••"
+									className="w-full h-10 pl-9 pr-10 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+								/>
+								<button
+									type="button"
+									onClick={() => setShowPassword((v) => !v)}
+									className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+									aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+								>
+									{showPassword ? <EyeOffIcon /> : <EyeIcon />}
+								</button>
+							</div>
+						</div>
+
+						<div>
+							<label className="block text-sm font-medium text-gray-600 mb-1.5">Confirm Password</label>
+							<div className="relative">
+								<input
+									type={showPassword ? "text" : "password"}
+									value={confirmPassword}
+									onChange={(e) => setConfirmPassword(e.target.value)}
+									placeholder="••••••••"
+									className="w-full h-10 pl-3 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+								/>
+							</div>
+						</div>
+
+						<button
+							onClick={handleSubmit}
+							className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm font-medium transition-all"
+						>
+							Create account
+						</button>
+						<div className="mt-4 text-center">
+							<a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">มีบัญชีแล้ว? เข้าสู่ระบบ</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
 }
 
+/* ───────── Inline SVG Icons (re-used from login) ───────── */
+
+function UserIcon() {
+	return (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+			<circle cx="12" cy="7" r="4" />
+		</svg>
+	)
+}
+
+function MailIcon() {
+	return (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+			<rect x="2" y="4" width="20" height="16" rx="2" />
+			<path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+		</svg>
+	);
+}
+
+function LockIcon() {
+	return (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+			<rect x="3" y="11" width="18" height="11" rx="2" />
+			<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+		</svg>
+	);
+}
+
+function EyeIcon() {
+	return (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+			<circle cx="12" cy="12" r="3" />
+		</svg>
+	);
+}
+
+function EyeOffIcon() {
+	return (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+			<line x1="1" y1="1" x2="23" y2="23" />
+		</svg>
+	);
+}

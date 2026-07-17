@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
+import { backend } from "@/lib/backend"
 
 type CommitItem = {
   id: string
@@ -28,16 +29,7 @@ export default function GitPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const token = localStorage.getItem("token")
-        const response = await fetch("http://localhost:4000/api/gitpulse", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
-        })
-        if (!response.ok) throw new Error("ไม่สามารถโหลดข้อมูล GitHub ได้")
-        const data = await response.json()
+        const data = await backend.gitPulse()
         if (data.commits) {
           setCommits(data.commits)
           setRepo(data.repo || "")

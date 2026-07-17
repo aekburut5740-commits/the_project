@@ -2,11 +2,14 @@ import { authHeader } from "./auth"
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"
 
-export async function apiFetch(path: string, options: RequestInit = {}) {
+export async function apiFetch<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...authHeader(),
     ...((options.headers as Record<string, string>) || {}),
+  }
+
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json"
   }
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -22,5 +25,5 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     throw new Error(data?.message || response.statusText || "API request failed")
   }
 
-  return data
+  return data as T
 }

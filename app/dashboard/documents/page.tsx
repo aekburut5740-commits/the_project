@@ -1,38 +1,55 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { FileText, FileImage, File, Download, Trash2, Upload, Search, FolderOpen, Eye, Lock } from "lucide-react"
 import {
-  MOCK_CURRENT_USER, MOCK_PROJECTS, MOCK_DOCUMENTS, CATEGORY_CONFIG,
-  type Document, type DocCategory,
+  MOCK_PROJECTS, CATEGORY_CONFIG, type Document, type DocCategory, type Project,
 } from "@/lib/mockData"
 import { useNotifications } from "@/lib/notificationStore"
+import { getUser } from "@/lib/auth"
+import { backend, normalizeProject } from "@/lib/backend"
+
+function normalizeDocument(file: any): Document {
+  const name = file.filename ?? file.name ?? "untitled"
+  const ext = name.split(".").pop()?.toLowerCase()
+  return {
+    id: Number(file.id), name, projectId: Number(file.project_id ?? file.projectId),
+    category: file.category ?? "other", size: file.filesize ? `${Math.max(1, Math.round(Number(file.filesize) / 1024))} KB` : "—",
+    uploadedBy: file.username ?? file.uploadedBy ?? "—", uploadedAt: file.created_at ?? file.uploadedAt ?? "",
+    isConfidential: Boolean(file.is_confidential ?? file.isConfidential ?? false),
+    fileType: ext === "pdf" ? "pdf" : ["jpg", "jpeg", "png", "gif", "webp"].includes(ext || "") ? "image" : ["doc", "docx", "txt", "md"].includes(ext || "") ? "doc" : "other",
+  }
+}
 
 export default function DocumentVaultPage() {
-  const user = MOCK_CURRENT_USER
-  const isAdmin = user.role === "admin"
-
-  const myProjectIds = useMemo(() =>
-    isAdmin ? MOCK_PROJECTS.map((p) => p.id)
-            : MOCK_PROJECTS.filter((p) => p.ownerId === user.id).map((p) => p.id),
-    [isAdmin, user.id]
-  )
-
-  const baseDocs = useMemo(() => {
-    const visible = MOCK_DOCUMENTS.filter((d) => myProjectIds.includes(d.projectId))
-    // customer ไม่เห็นเอกสารลับ
-    return isAdmin ? visible : visible.filter((d) => !d.isConfidential)
-  }, [isAdmin, myProjectIds])
+  const user = getUser()
+  const isAdmin = user?.role === "admin"
+  const [projects, setProjects] = useState<Project[]>([])
+  const myProjectIds = useMemo(() => projects.map((p) => p.id), [projects])
 
   const { addNotif } = useNotifications()
-  const [docs, setDocs] = useState<Document[]>(baseDocs)
+  const [docs, setDocs] = useState<Document[]>([])
+  const [error, setError] = useState("")
   const [search, setSearch] = useState("")
   const [filterProject, setFilterProject] = useState<number | "all">("all")
   const [filterCategory, setFilterCategory] = useState<DocCategory | "all">("all")
   const [showUpload, setShowUpload] = useState(false)
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
 
-  const myProjects = MOCK_PROJECTS.filter((p) => myProjectIds.includes(p.id))
+  const myProjects = projects
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await backend.projects(isAdmin)
+        const nextProjects = data.map((p: any) => normalizeProject(p))
+        setProjects(nextProjects)
+        const groups = await Promise.all(nextProjects.map((p) => backend.files(p.id)))
+        setDocs(groups.flat().map(normalizeDocument))
+      } catch (err) { setError(err instanceof Error ? err.message : "ไม่สามารถโหลดเอกสารได้") }
+    }
+    load()
+  }, [isAdmin])
 
   const filtered = docs.filter((d) => {
     const matchSearch = d.name.toLowerCase().includes(search.toLowerCase())
@@ -48,9 +65,10 @@ export default function DocumentVaultPage() {
     return acc
   }, {})
 
-  function handleUpload(newDoc: Omit<Document, "id">) {
-    setDocs((prev) => [...prev, { ...newDoc, id: Date.now() }])
-    const proj = MOCK_PROJECTS.find((p) => p.id === newDoc.projectId)
+  async function handleUpload(newDoc: Omit<Document, "id">, file: File) {
+    try { const saved = normalizeDocument(await backend.uploadFile(newDoc.projectId, file))
+    setDocs((prev) => [...prev, saved])
+    const proj = projects.find((p) => p.id === newDoc.projectId)
     addNotif({
       type: "document",
       title: "อัปโหลดเอกสารใหม่",
@@ -58,6 +76,7 @@ export default function DocumentVaultPage() {
       forUserId: proj?.ownerId ?? "all",
     })
     setShowUpload(false)
+    } catch (err) { setError(err instanceof Error ? err.message : "อัปโหลดเอกสารไม่สำเร็จ") }
   }
 
   return (
@@ -73,6 +92,7 @@ export default function DocumentVaultPage() {
           </button>
         )}
       </div>
+      {error && <div style={{ color: "#f87171", marginBottom: 12 }}>{error}</div>}
 
       {/* Role badge */}
       <div style={{ marginBottom: 20 }}>
@@ -118,7 +138,7 @@ export default function DocumentVaultPage() {
         <div style={S.empty}>ไม่พบเอกสาร</div>
       ) : (
         Object.entries(grouped).map(([projId, items]) => {
-          const proj = MOCK_PROJECTS.find((p) => p.id === Number(projId))
+          const proj = projects.find((p) => p.id === Number(projId))
           return (
             <div key={projId} style={{ marginBottom: 28 }}>
               <div style={S.groupHeader}>
@@ -130,9 +150,10 @@ export default function DocumentVaultPage() {
                 {items.map((doc) => (
                   <DocCard key={doc.id} doc={doc} isAdmin={isAdmin}
                     onPreview={() => setPreviewDoc(doc)}
-                    onDelete={() => {
+                    onDelete={async () => {
                       if (confirm("ลบเอกสารนี้?")) {
-                        const proj = MOCK_PROJECTS.find((p) => p.id === doc.projectId)
+                        const proj = projects.find((p) => p.id === doc.projectId)
+                        try { await backend.deleteFile(doc.id)
                         setDocs((prev) => prev.filter((d) => d.id !== doc.id))
                         addNotif({
                           type: "document",
@@ -140,6 +161,7 @@ export default function DocumentVaultPage() {
                           message: `Admin ลบ ${doc.name} ออกจาก ${proj?.name}`,
                           forUserId: proj?.ownerId ?? "all",
                         })
+                        } catch (err) { setError(err instanceof Error ? err.message : "ลบเอกสารไม่สำเร็จ") }
                       }
                     }} />
                 ))}
@@ -193,7 +215,7 @@ function DocCard({ doc, isAdmin, onPreview, onDelete }: {
 }
 
 function UploadModal({ projectIds, onClose, onUpload }: {
-  projectIds: number[]; onClose: () => void; onUpload: (d: Omit<Document, "id">) => void
+  projectIds: number[]; onClose: () => void; onUpload: (d: Omit<Document, "id">, file: File) => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -253,7 +275,7 @@ function UploadModal({ projectIds, onClose, onUpload }: {
               size: selectedFile.size > 1048576 ? `${(selectedFile.size/1048576).toFixed(1)} MB` : `${(selectedFile.size/1024).toFixed(0)} KB`,
               uploadedBy: "Admin", uploadedAt: new Date().toISOString().split("T")[0],
               isConfidential: form.isConfidential, fileType: getFileType(selectedFile.name),
-            })}
+            }, selectedFile)}
             style={{ ...S.saveBtn, opacity: selectedFile ? 1 : 0.5, cursor: selectedFile ? "pointer" : "not-allowed" }}>
             อัปโหลด
           </button>

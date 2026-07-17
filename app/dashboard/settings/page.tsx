@@ -3,57 +3,43 @@
 import React, { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Camera, Bell, User as UserIcon, Mail, Lock, ArrowRight } from "lucide-react"
-import { MOCK_CURRENT_USER, MOCK_USERS, type User } from "@/lib/mockData"
+import { type User } from "@/lib/mockData"
+import { getUser } from "@/lib/auth"
+import { backend } from "@/lib/backend"
 
 export default function SettingsPage() {
-  const user = MOCK_CURRENT_USER
+  const user = getUser() || { id: 0, username: "", role: "customer" as const }
   const isAdmin = user.role === "admin"
   const [username, setUsername] = useState(user.username)
-  const [email, setEmail] = useState(() => `${user.username.replace(/_/g, ".")}@example.com`)
+  const [email, setEmail] = useState("")
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [users, setUsers] = useState<import("@/lib/mockData").User[]>(MOCK_USERS)
+  const [users, setUsers] = useState<import("@/lib/mockData").User[]>([])
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [oldPassword, setOldPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
-  const [dashboardData, setDashboardData] = useState<unknown>(null)
 
   useEffect(() => {
-    const loadDashboard = async () => {
+    const loadSettings = async () => {
       try {
-        const token = localStorage.getItem("token")
-        const res = await fetch("http://localhost:4000/api/dashboard", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.message || "ไม่สามารถโหลด Dashboard ได้")
-        setDashboardData(data)
+        const profile = await backend.profile()
+        setUsername(profile.user.username)
+        setEmail((profile.user as any).email || "")
+        const maintenance = await backend.maintenance()
+        setMaintenanceMode(Boolean(maintenance?.is_active))
+        if (isAdmin) setUsers(await backend.users())
       } catch (error) {
-        console.error("Error occurred while loading dashboard:", error)
+        console.error("Error occurred while loading settings:", error)
       }
     }
-    loadDashboard()
-  }, [])
+    loadSettings()
+  }, [isAdmin])
 
   const handleSaveProfile = async () => {
     try {
-      const token = localStorage.getItem("token")
-      const res = await fetch("http://localhost:4000/api/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ username, email })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || "ไม่สามารถบันทึกโปรไฟล์ได้")
+      await backend.updateProfile(username, email)
       setEditing(false)
     } catch (error) {
       console.error("Error occurred while updating profile:", error)
@@ -62,17 +48,7 @@ export default function SettingsPage() {
 
   const handleChangePassword = async () => {
     try {
-      const token = localStorage.getItem("token")
-      const res = await fetch("http://localhost:4000/api/profile/password", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || "ไม่สามารถเปลี่ยนรหัสผ่านได้")
+      await backend.changePassword(oldPassword, newPassword)
       setOldPassword("")
       setNewPassword("")
     } catch (error) {
@@ -101,8 +77,9 @@ export default function SettingsPage() {
 
   const [activeTab, setActiveTab] = useState<"account" | "notifications" | "users" | "system">("account")
 
-  function toggleMaintenance() {
-    setMaintenanceMode((current) => !current)
+  async function toggleMaintenance() {
+    const next = !maintenanceMode
+    try { await backend.setMaintenance(next); setMaintenanceMode(next) } catch (error) { console.error("Error occurred while updating maintenance:", error) }
   }
 
   function toggleUserRole(id: number) {

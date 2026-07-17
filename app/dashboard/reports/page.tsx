@@ -1,11 +1,9 @@
 "use client"
 
-import React, { useState } from "react"
-import {
-  MOCK_CURRENT_USER,
-  MOCK_PROJECTS,
-  MOCK_MILESTONES,
-} from "@/lib/mockData"
+import React, { useEffect, useState } from "react"
+import { getUser } from "@/lib/auth"
+import { backend, normalizeProject } from "@/lib/backend"
+import type { Project } from "@/lib/mockData"
 
 const REPORT_TYPES = [
   {
@@ -100,13 +98,17 @@ const styles: Record<string, React.CSSProperties> = {
 
 function ReportsPage() {
   const [printOrientation, setPrintOrientation] = useState<"portrait" | "landscape">("portrait")
-  const user = MOCK_CURRENT_USER
-  const isAdmin = user.role === "admin"
+  const user = getUser()
+  const isAdmin = user?.role === "admin"
+  const [projects, setProjects] = useState<Project[]>([])
+  const [milestones, setMilestones] = useState<any[]>([])
+  const [feedbacks, setFeedbacks] = useState<any[]>([])
+  const [error, setError] = useState("")
 
-  const projects = MOCK_PROJECTS.filter((project) => (isAdmin ? true : project.ownerId === user.id))
+  useEffect(() => { backend.reports(isAdmin).then((data: any) => { setProjects((data.projects || []).map(normalizeProject)); setMilestones(data.milestones || []); setFeedbacks(data.feedbacks || []) }).catch((err) => setError(err instanceof Error ? err.message : "โหลดรายงานไม่สำเร็จ")) }, [isAdmin])
   const totalProjects = projects.length
   const completedProjects = projects.filter((project) => project.status === "completed").length
-  const overdueMilestones = MOCK_MILESTONES.filter((milestone) => milestone.status === "overdue").length
+  const overdueMilestones = milestones.filter((milestone) => milestone.status === "overdue").length
   const avgProgress = totalProjects
     ? Math.round(projects.reduce((sum, project) => sum + project.progress, 0) / totalProjects)
     : 0
@@ -118,6 +120,7 @@ function ReportsPage() {
 
   return (
     <div style={styles.page} className={`report-print-wrapper print-${printOrientation}`}>
+      {error && <div style={{ color: "#f87171" }}>{error}</div>}
       <style>{`
         @page { size: A4 ${printOrientation}; margin: 16mm; }
         @media print {

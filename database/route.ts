@@ -94,6 +94,12 @@ export async function getAllUsers() {
   )
   return result.rows
 }
+
+export async function getProfile(user_id: number) {
+  const result = await db.query("SELECT id, username, email, role FROM users WHERE id = $1", [user_id])
+  if (!result.rows.length) throw new Error("ไม่พบ user")
+  return result.rows[0]
+}
 // Customer: อัปเดตข้อมูลโปรเจคของตัวเอง
 export async function updateProject(
   id: number,

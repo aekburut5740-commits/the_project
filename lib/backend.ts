@@ -1,14 +1,15 @@
 import { apiFetch } from "./api"
-import type { AuthUser } from "./auth"
+import type { JwtUser } from "./auth"
 
 export const backend = {
-  profile: () => apiFetch<{ user: AuthUser }>("/api/profile"),
+  profile: () => apiFetch<{ user: JwtUser }>("/api/profile"),
   projects: (admin = false) => apiFetch<any[]>(admin ? "/api/admin/projects" : "/api/projects"),
   createProject: (body: any) => apiFetch("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   updateProject: (id: number, body: any, admin = false) => apiFetch(admin ? `/api/admin/projects/${id}` : `/api/projects/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   updateProgress: (id: number, progress: number) => apiFetch(`/api/admin/projects/${id}/progress`, { method: "PUT", body: JSON.stringify({ progress }) }),
   deleteProject: (id: number) => apiFetch(`/api/admin/projects/${id}`, { method: "DELETE" }),
   dashboard: (admin = false) => apiFetch(admin ? "/api/admin/dashboard" : "/api/dashboard"),
+  projectHealth: (id: number) => apiFetch<any>(`/api/projects/${id}/health`),
   milestones: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/milestones`),
   createMilestone: (projectId: number, body: any) => apiFetch(`/api/projects/${projectId}/milestones`, { method: "POST", body: JSON.stringify(body) }),
   updateMilestone: (id: number, body: any) => apiFetch(`/api/milestones/${id}`, { method: "PUT", body: JSON.stringify(body) }),
@@ -34,6 +35,11 @@ export const backend = {
   notifications: () => apiFetch<any[]>("/api/notifications"),
   markNotificationRead: (id: number) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
+  comments: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/comments`),
+  createComment: (projectId: number, content: string) => apiFetch(`/api/projects/${projectId}/comments`, { method: "POST", body: JSON.stringify({ content }) }),
+  deleteComment: (id: number) => apiFetch(`/api/comments/${id}`, { method: "DELETE" }),
+  projectLogs: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/logs`),
+  gitPulse: () => apiFetch<any>("/api/gitpulse"),
 }
 
 export function normalizeProject(p: any) {

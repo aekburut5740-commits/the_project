@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { setToken } from "@/lib/auth";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -12,16 +14,12 @@ export default function LoginPage() {
  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
   e.preventDefault()
   try {
-    const res = await fetch('http://localhost:4000/api/login', {
+    const data = await apiFetch('/api/login', {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ username, email, password })
+      body: JSON.stringify({ username: username || email, password })
     });
-    const data = await res.json()
     if (data.token) {
-      localStorage.setItem('token', data.token)
+      setToken(data.token)
       window.location.href = '/dashboard'
     }
   } catch (error) {
