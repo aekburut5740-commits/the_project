@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+<<<<<<< HEAD
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setError(null);
@@ -47,6 +48,27 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+=======
+ const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.preventDefault()
+  try {
+    const res = await fetch('http://localhost:4000/api/login', {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json()
+    if (data.token) {
+      localStorage.setItem('token', data.token)
+      window.location.href = '/dashboard'
+    }
+  } catch (error) {
+    console.error("Error occurred while logging in:", error);
+  }
+};
+>>>>>>> 645b696d430c5a4d9701086fb670baf5df98edbf
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
