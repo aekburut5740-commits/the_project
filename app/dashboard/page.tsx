@@ -1,95 +1,115 @@
+"use client"
+
 import Link from "next/link"
-import { notFound } from "next/navigation"
-import { MOCK_PROJECTS, STATUS_CONFIG } from "@/lib/mockData"
+import { useEffect, useState } from "react"
+import { backend, normalizeProject } from "@/lib/backend"
+import { getUser } from "@/lib/auth"
+import { STATUS_CONFIG, type Project } from "@/lib/mockData"
 
-export default async function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const project = MOCK_PROJECTS.find((item) => item.id === Number(id))
+type DashboardData = {
+  total?: number
+  total_projects?: number
+  total_users?: number
+  summary?: Record<string, number>
+  projects?: unknown[]
+}
 
-  if (!project) {
-    notFound()
-  }
+export default function DashboardPage() {
+  const user = getUser()
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  const { color, label } = STATUS_CONFIG[project.status]
+  useEffect(() => {
+    backend.dashboard(user?.role === "admin")
+      .then((result) => setData(result as DashboardData))
+      .catch((err) => setError(err instanceof Error ? err.message : "ไม่สามารถโหลด Dashboard ได้"))
+      .finally(() => setLoading(false))
+  }, [user?.role])
+
+  const projects: Project[] = (data?.projects || []).map(normalizeProject)
+  const summary = data?.summary || {}
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0d1117", color: "#e5e7eb", padding: "28px 32px" }}>
-      <Link href="/dashboard/projects" style={{ color: "#4f8ef7", textDecoration: "none", fontSize: 14, fontWeight: 600, display: "inline-block", marginBottom: 20 }}>
-        ← กลับไปหน้าผลิตภัณฑ์
-      </Link>
-
-      <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: "#f9fafb" }}>{project.name}</h1>
-            <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 14 }}>{project.description}</p>
-          </div>
-          <span style={{ padding: "6px 10px", borderRadius: 999, border: `1px solid ${color}44`, background: `${color}22`, color, fontSize: 12, fontWeight: 700 }}>
-            {label}
-          </span>
+    <div style={S.page}>
+      <div style={S.header}>
+        <div>
+          <div style={S.eyebrow}>Overview</div>
+          <h1 style={S.title}>Dashboard</h1>
+          <p style={S.subtitle}>ภาพรวมโปรเจคและความคืบหน้าล่าสุดจากระบบ</p>
         </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-          <InfoCard label="เว็บไซต์" value={project.website} />
-          <InfoCard label="ความคืบหน้า" value={`${project.progress}%`} />
-          <InfoCard label="แพ็กเกจ" value={project.package} />
-          <InfoCard label="วันที่เริ่ม" value={new Date(project.startDate).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })} />
-        </div>
-
-        <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "16px 18px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              ความคืบหน้าโครงการ
-            </div>
-            <div style={{ fontSize: 14, color: "#f9fafb", fontWeight: 700 }}>{project.progress}%</div>
-          </div>
-          <div style={{ height: 10, borderRadius: 999, background: "#1f2937", overflow: "hidden" }}>
-            <div style={{ width: `${project.progress}%`, height: "100%", borderRadius: 999, background: color, transition: "width 0.3s ease" }} />
-          </div>
-          <div style={{ marginTop: 8, fontSize: 13, color: "#9ca3af" }}>สถานะ: {label}</div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-          <InfoCard label="Domain" value={project.domain || "-"} />
-          <InfoCard label="Token" value={project.token || "-"} />
-          <InfoCard label="Owner ID" value={String(project.ownerId)} />
-          <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              ผู้จัดการและดูแล
-            </div>
-            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-              {project.managers.length > 0 ? (
-                project.managers.map((manager) => (
-                  <div key={manager.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${manager.color}22`, color: manager.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: `1px solid ${manager.color}44` }}>
-                      {manager.avatar}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, color: "#f9fafb", fontWeight: 600 }}>{manager.name}</div>
-                      <div style={{ fontSize: 12, color: "#9ca3af" }}>ผู้ดูแลโปรเจกต์</div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ fontSize: 13, color: "#9ca3af" }}>ยังไม่มีผู้จัดการที่กำกับดูแล</div>
-              )}
-            </div>
-          </div>
-        </div>
+        <span style={S.roleBadge}>{user?.role === "admin" ? "Admin" : "Customer"}</span>
       </div>
+
+      {error && <div style={S.error}>{error}</div>}
+
+      <div style={S.statsGrid}>
+        <StatCard label="โปรเจคทั้งหมด" value={data?.total_projects ?? data?.total ?? projects.length} color="#4f8ef7" loading={loading} />
+        <StatCard label="กำลังดำเนินการ" value={(summary.in_progress ?? 0) + (summary.on_track ?? 0)} color="#fbbf24" loading={loading} />
+        <StatCard label="เสร็จแล้ว" value={summary.completed ?? 0} color="#34d399" loading={loading} />
+        <StatCard label="ล่าช้า" value={summary.delayed ?? 0} color="#f87171" loading={loading} />
+      </div>
+
+      <section style={S.panel}>
+        <div style={S.panelHeader}>
+          <div>
+            <h2 style={S.panelTitle}>Projects</h2>
+            <p style={S.panelSub}>โปรเจคล่าสุดที่คุณสามารถเข้าถึงได้</p>
+          </div>
+          <Link href="/dashboard/projects" style={S.viewAll}>ดูทั้งหมด →</Link>
+        </div>
+
+        {loading ? <div style={S.empty}>กำลังโหลดข้อมูล...</div> : projects.length === 0 ? <div style={S.empty}>ยังไม่มีโปรเจค</div> : (
+          <div style={S.projectList}>
+            {projects.slice(0, 6).map((project) => {
+              const status = STATUS_CONFIG[project.status] || { label: project.status, color: "#6b7280" }
+              return (
+                <Link key={project.id} href={`/dashboard/projects/${project.id}`} style={S.projectRow}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={S.projectName}>{project.name}</div>
+                    <div style={S.projectDesc}>{project.description || "ไม่มีรายละเอียด"}</div>
+                  </div>
+                  <div style={S.progressArea}>
+                    <div style={S.progressText}>{project.progress}%</div>
+                    <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${project.progress}%`, background: status.color }} /></div>
+                    <div style={{ color: status.color, fontSize: 11 }}>{status.label}</div>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "12px 14px" }}>
-      <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-      <div style={{ fontSize: 14, color: "#f9fafb", marginTop: 6, wordBreak: "break-word" }}>{value}</div>
-    </div>
-  )
+function StatCard({ label, value, color, loading }: { label: string; value: number; color: string; loading: boolean }) {
+  return <div style={{ ...S.statCard, borderTopColor: color }}><div style={S.statValue}>{loading ? "—" : value}</div><div style={S.statLabel}>{label}</div></div>
+}
+
+const S: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", background: "#0d1117", color: "#e5e7eb", padding: "28px 32px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" },
+  eyebrow: { color: "#4f8ef7", fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em" },
+  title: { margin: "5px 0 0", fontSize: 30, color: "#f9fafb" },
+  subtitle: { color: "#9ca3af", margin: "8px 0 0", fontSize: 14 },
+  roleBadge: { background: "#4f8ef722", color: "#4f8ef7", border: "1px solid #4f8ef744", padding: "7px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700 },
+  error: { color: "#f87171", background: "#7f1d1d22", border: "1px solid #f8717144", borderRadius: 10, padding: 12, marginTop: 18 },
+  statsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginTop: 26 },
+  statCard: { background: "#111827", border: "1px solid #1f2937", borderTop: "3px solid", borderRadius: 14, padding: 18 },
+  statValue: { color: "#f9fafb", fontSize: 28, fontWeight: 800, fontFamily: "monospace" },
+  statLabel: { color: "#9ca3af", fontSize: 12, marginTop: 5 },
+  panel: { marginTop: 22, background: "#111827", border: "1px solid #1f2937", borderRadius: 16, padding: 22 },
+  panelHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14 },
+  panelTitle: { color: "#f9fafb", fontSize: 17, margin: 0 },
+  panelSub: { color: "#6b7280", fontSize: 12, margin: "5px 0 0" },
+  viewAll: { color: "#4f8ef7", fontSize: 13, textDecoration: "none", fontWeight: 700 },
+  empty: { color: "#6b7280", padding: "36px 0", textAlign: "center" },
+  projectList: { display: "flex", flexDirection: "column", gap: 10, marginTop: 18 },
+  projectRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "14px 16px", color: "inherit", textDecoration: "none" },
+  projectName: { color: "#f9fafb", fontSize: 14, fontWeight: 700 },
+  projectDesc: { color: "#6b7280", fontSize: 12, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  progressArea: { width: 160, flexShrink: 0 }, progressText: { color: "#f9fafb", fontSize: 12, textAlign: "right", marginBottom: 5 },
+  progressTrack: { height: 6, background: "#1f2937", borderRadius: 999, overflow: "hidden", marginBottom: 5 }, progressFill: { height: "100%", borderRadius: 999 },
 }

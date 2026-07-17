@@ -1,95 +1,78 @@
+"use client"
+
 import Link from "next/link"
-import { notFound } from "next/navigation"
-import { MOCK_PROJECTS, STATUS_CONFIG } from "@/lib/mockData"
+import { useEffect, useMemo, useState } from "react"
+import { backend, normalizeProject } from "@/lib/backend"
+import { getUser } from "@/lib/auth"
+import { STATUS_CONFIG, type Project, type ProjectStatus } from "@/lib/mockData"
 
-export default async function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const project = MOCK_PROJECTS.find((item) => item.id === Number(id))
+export default function ProjectsPage() {
+  const user = getUser()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [filter, setFilter] = useState<ProjectStatus | "all">("all")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  if (!project) {
-    notFound()
-  }
+  useEffect(() => {
+    backend.projects(user?.role === "admin")
+      .then((rows) => setProjects(rows.map(normalizeProject)))
+      .catch((err) => setError(err instanceof Error ? err.message : "ไม่สามารถโหลดโปรเจคได้"))
+      .finally(() => setLoading(false))
+  }, [user?.role])
 
-  const { color, label } = STATUS_CONFIG[project.status]
+  const filtered = useMemo(() => filter === "all" ? projects : projects.filter((project) => project.status === filter), [filter, projects])
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0d1117", color: "#e5e7eb", padding: "28px 32px" }}>
-      <Link href="/dashboard/projects" style={{ color: "#4f8ef7", textDecoration: "none", fontSize: 14, fontWeight: 600, display: "inline-block", marginBottom: 20 }}>
-        ← กลับไปหน้าผลิตภัณฑ์
-      </Link>
-
-      <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: "#f9fafb" }}>{project.name}</h1>
-            <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 14 }}>{project.description}</p>
-          </div>
-          <span style={{ padding: "6px 10px", borderRadius: 999, border: `1px solid ${color}44`, background: `${color}22`, color, fontSize: 12, fontWeight: 700 }}>
-            {label}
-          </span>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-          <InfoCard label="เว็บไซต์" value={project.website} />
-          <InfoCard label="ความคืบหน้า" value={`${project.progress}%`} />
-          <InfoCard label="แพ็กเกจ" value={project.package} />
-          <InfoCard label="วันที่เริ่ม" value={new Date(project.startDate).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })} />
-        </div>
-
-        <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "16px 18px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              ความคืบหน้าโครงการ
-            </div>
-            <div style={{ fontSize: 14, color: "#f9fafb", fontWeight: 700 }}>{project.progress}%</div>
-          </div>
-          <div style={{ height: 10, borderRadius: 999, background: "#1f2937", overflow: "hidden" }}>
-            <div style={{ width: `${project.progress}%`, height: "100%", borderRadius: 999, background: color, transition: "width 0.3s ease" }} />
-          </div>
-          <div style={{ marginTop: 8, fontSize: 13, color: "#9ca3af" }}>สถานะ: {label}</div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-          <InfoCard label="Domain" value={project.domain || "-"} />
-          <InfoCard label="Token" value={project.token || "-"} />
-          <InfoCard label="Owner ID" value={String(project.ownerId)} />
-          <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              ผู้จัดการและดูแล
-            </div>
-            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-              {project.managers.length > 0 ? (
-                project.managers.map((manager) => (
-                  <div key={manager.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${manager.color}22`, color: manager.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: `1px solid ${manager.color}44` }}>
-                      {manager.avatar}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, color: "#f9fafb", fontWeight: 600 }}>{manager.name}</div>
-                      <div style={{ fontSize: 12, color: "#9ca3af" }}>ผู้ดูแลโปรเจกต์</div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ fontSize: 13, color: "#9ca3af" }}>ยังไม่มีผู้จัดการที่กำกับดูแล</div>
-              )}
-            </div>
-          </div>
-        </div>
+    <div style={S.page}>
+      <div style={S.header}>
+        <div><h1 style={S.title}>Projects</h1><p style={S.subtitle}>รายการโปรเจคทั้งหมดที่บัญชีของคุณสามารถเข้าถึงได้</p></div>
+        <div style={S.totalBadge}>{projects.length} โปรเจค</div>
       </div>
+
+      <div style={S.filters}>
+        {(["all", "pending", "in_progress", "completed"] as const).map((status) => (
+          <button key={status} onClick={() => setFilter(status)} style={{ ...S.filterButton, background: filter === status ? "#1f2937" : "transparent", color: filter === status ? "#f9fafb" : "#6b7280" }}>
+            {status === "all" ? "ทั้งหมด" : STATUS_CONFIG[status].label}
+          </button>
+        ))}
+      </div>
+
+      {error && <div style={S.error}>{error}</div>}
+      {loading ? <div style={S.empty}>กำลังโหลดโปรเจค...</div> : filtered.length === 0 ? <div style={S.empty}>ไม่พบโปรเจค</div> : (
+        <div style={S.grid}>
+          {filtered.map((project) => {
+            const status = STATUS_CONFIG[project.status] || { label: project.status, color: "#6b7280" }
+            return (
+              <Link key={project.id} href={`/dashboard/projects/${project.id}`} style={S.card}>
+                <div style={S.cardHeader}>
+                  <div style={S.projectName}>{project.name}</div>
+                  <span style={{ ...S.statusBadge, color: status.color, background: `${status.color}22`, borderColor: `${status.color}44` }}>{status.label}</span>
+                </div>
+                <p style={S.description}>{project.description || "ไม่มีรายละเอียด"}</p>
+                <div style={S.metaGrid}>
+                  <Meta label="Domain" value={project.domain || project.website || "—"} />
+                  <Meta label="Package" value={project.package || "—"} />
+                </div>
+                <div style={S.progressHeader}><span>ความคืบหน้า</span><strong>{project.progress}%</strong></div>
+                <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${project.progress}%`, background: status.color }} /></div>
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "12px 14px" }}>
-      <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-      <div style={{ fontSize: 14, color: "#f9fafb", marginTop: 6, wordBreak: "break-word" }}>{value}</div>
-    </div>
-  )
+function Meta({ label, value }: { label: string; value: string }) { return <div><div style={S.metaLabel}>{label}</div><div style={S.metaValue}>{value}</div></div> }
+const S: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", background: "#0d1117", color: "#e5e7eb", padding: "28px 32px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }, title: { margin: 0, color: "#f9fafb", fontSize: 28 }, subtitle: { color: "#9ca3af", fontSize: 14, margin: "7px 0 0" },
+  totalBadge: { color: "#4f8ef7", background: "#4f8ef722", border: "1px solid #4f8ef744", borderRadius: 999, padding: "7px 12px", fontSize: 12, fontWeight: 700 },
+  filters: { display: "flex", gap: 5, marginTop: 24, paddingBottom: 14, borderBottom: "1px solid #1f2937", flexWrap: "wrap" }, filterButton: { border: 0, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer" },
+  error: { color: "#f87171", marginTop: 18 }, empty: { color: "#6b7280", textAlign: "center", padding: 50 },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 22 },
+  card: { background: "#111827", border: "1px solid #1f2937", borderRadius: 16, padding: 20, color: "inherit", textDecoration: "none" }, cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }, projectName: { color: "#f9fafb", fontSize: 16, fontWeight: 700 }, statusBadge: { border: "1px solid", borderRadius: 999, padding: "5px 8px", fontSize: 10, fontWeight: 700, flexShrink: 0 },
+  description: { color: "#9ca3af", fontSize: 13, lineHeight: 1.6, minHeight: 42 }, metaGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, background: "#0d1117", borderRadius: 10, padding: 12, marginTop: 16 }, metaLabel: { color: "#4b5563", fontSize: 10, textTransform: "uppercase" }, metaValue: { color: "#d1d5db", fontSize: 12, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis" },
+  progressHeader: { display: "flex", justifyContent: "space-between", color: "#6b7280", fontSize: 11, marginTop: 16 }, progressTrack: { height: 7, background: "#1f2937", borderRadius: 999, overflow: "hidden", marginTop: 7 }, progressFill: { height: "100%", borderRadius: 999 },
 }
