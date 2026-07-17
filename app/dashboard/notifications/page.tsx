@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { Bell, Trash2, CheckCheck } from "lucide-react"
 import { getUser } from "@/lib/auth"
-import { apiFetch } from "@/lib/api"
 
 interface NotificationItem {
   id: number
@@ -29,8 +28,17 @@ export default function NotificationsPage() {
       }
 
       try {
-        const data = await apiFetch("/api/notifications") as NotificationItem[]
-        setNotifications(data)
+        const token = localStorage.getItem("token")
+        const res = await fetch("http://localhost:4000/api/notifications", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.message || "ไม่สามารถโหลดแจ้งเตือนได้")
+        setNotifications(Array.isArray(data) ? data : [])
       } catch (err) {
         setError(err instanceof Error ? err.message : "ไม่สามารถโหลดแจ้งเตือนได้")
       } finally {
@@ -53,7 +61,16 @@ export default function NotificationsPage() {
 
   const handleMarkRead = async (id: number) => {
     try {
-      await apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" })
+      const token = localStorage.getItem("token")
+      const res = await fetch(`http://localhost:4000/api/notifications/${id}/read`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || "ไม่สามารถอัปเดตการแจ้งเตือนได้")
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n))
     } catch (err) {
       setError(err instanceof Error ? err.message : "ไม่สามารถอัปเดตสถานะอ่านได้")
@@ -62,7 +79,16 @@ export default function NotificationsPage() {
 
   const handleMarkAllRead = async () => {
     try {
-      await apiFetch("/api/notifications/read-all", { method: "PATCH" })
+      const token = localStorage.getItem("token")
+      const res = await fetch("http://localhost:4000/api/notifications/read-all", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || "ไม่สามารถอ่านการแจ้งเตือนทั้งหมดได้")
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
     } catch (err) {
       setError(err instanceof Error ? err.message : "ไม่สามารถอ่านทั้งหมดได้")

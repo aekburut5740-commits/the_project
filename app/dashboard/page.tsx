@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Camera, Bell, User as UserIcon, Mail, Lock, ArrowRight } from "lucide-react"
 import { MOCK_CURRENT_USER, MOCK_USERS, type User } from "@/lib/mockData"
@@ -16,6 +16,69 @@ export default function SettingsPage() {
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [avatar, setAvatar] = useState<string | null>(null)
+  const [oldPassword, setOldPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [dashboardData, setDashboardData] = useState<unknown>(null)
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        const token = localStorage.getItem("token")
+        const res = await fetch("http://localhost:4000/api/dashboard", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.message || "ไม่สามารถโหลด Dashboard ได้")
+        setDashboardData(data)
+      } catch (error) {
+        console.error("Error occurred while loading dashboard:", error)
+      }
+    }
+    loadDashboard()
+  }, [])
+
+  const handleSaveProfile = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const res = await fetch("http://localhost:4000/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ username, email })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || "ไม่สามารถบันทึกโปรไฟล์ได้")
+      setEditing(false)
+    } catch (error) {
+      console.error("Error occurred while updating profile:", error)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const res = await fetch("http://localhost:4000/api/profile/password", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || "ไม่สามารถเปลี่ยนรหัสผ่านได้")
+      setOldPassword("")
+      setNewPassword("")
+    } catch (error) {
+      console.error("Error occurred while changing password:", error)
+    }
+  }
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -146,16 +209,19 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <input placeholder="รหัสผ่านใหม่" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
-                    <input placeholder="ยืนยันรหัสผ่าน" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
+                    <input value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} placeholder="รหัสผ่านเดิม" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
+                    <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="รหัสผ่านใหม่" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
                   </div>
+                  <button type="button" onClick={handleChangePassword} className="mt-4 inline-flex items-center justify-center rounded-3xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition">
+                    เปลี่ยนรหัสผ่าน
+                  </button>
                 </div>
 
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm text-slate-400">บันทึกการเปลี่ยนแปลงข้อมูลบัญชี</p>
                   </div>
-                  <button type="button" className="inline-flex items-center justify-center rounded-3xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition">
+                  <button type="button" onClick={handleSaveProfile} className="inline-flex items-center justify-center rounded-3xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition">
                     บันทึกการตั้งค่า
                   </button>
                 </div>
