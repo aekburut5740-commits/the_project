@@ -1,96 +1,87 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import {
-  MOCK_CURRENT_USER, MOCK_PROJECTS, STATUS_CONFIG,
-  type Project, type ProjectStatus,
-} from "@/lib/mockData"
-import { useNotifications } from "@/lib/notificationStore"
+import { STATUS_CONFIG, type Project, type ProjectStatus } from "@/lib/mockData"
+import { backend, normalizeProject } from "@/lib/backend"
+import { getUser, type AuthUser } from "@/lib/auth"
 
 const PACKAGES = ["Starter", "Professional", "Enterprise"]
 
 export default function ProjectsPage() {
-  const user = MOCK_CURRENT_USER
-  const isAdmin = user.role === "admin"
-  const { addNotif } = useNotifications()
-
-  const baseProjects = useMemo(() =>
-    isAdmin ? MOCK_PROJECTS : MOCK_PROJECTS.filter((p) => p.ownerId === user.id),
-    [isAdmin, user.id]
-  )
-
-  const [projects, setProjects] = useState<Project[]>(baseProjects)
+  const [user, setUser] = useState<AuthUser>(() => getUser() || ({ id: 0, username: "", role: "customer" } as AuthUser))
+  const [projects, setProjects] = useState<Project[]>([])
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | "all">("all")
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const isAdmin = user.role === "admin"
+
+  async function loadProjects() {
+    try {
+      setError(null)
+      const profile = await backend.profile()
+      setUser(profile.user)
+      const raw = await backend.projects(profile.user.role === "admin")
+      const normalized = await Promise.all((Array.isArray(raw) ? raw : []).map(async (item) => {
+        const project = normalizeProject(item)
+        try {
+          const members = await backend.projectMembers(project.id)
+          project.managers = (Array.isArray(members) ? members : []).map((m: any) => ({ id: Number(m.id), name: m.name, avatar: getInitials(m.name), color: "#4f8ef7" }))
+        } catch {}
+        project.website = project.website || project.domain || ""
+        return project as Project
+      }))
+      setProjects(normalized)
+    } catch (err) { setError(err instanceof Error ? err.message : "โหลดโปรเจคไม่สำเร็จ") }
+  }
+
+  useEffect(() => { void loadProjects() }, [])
 
   const filtered = projects.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.website.toLowerCase().includes(search.toLowerCase())
+      (p.website || "").toLowerCase().includes(search.toLowerCase())
     const matchStatus = filterStatus === "all" || p.status === filterStatus
     return matchSearch && matchStatus
   })
 
-  function handleSave(updated: Project) {
-    if (isCreating) {
-      setProjects((prev) => [...prev, { ...updated, id: Date.now() }])
-      addNotif({
-        type: "project",
-        title: "โปรเจคใหม่ถูกสร้าง",
-        message: `Admin สร้างโปรเจค "${updated.name}" แล้ว`,
-        forUserId: "all",
-      })
-    } else {
-      const old = projects.find((p) => p.id === updated.id)
-      setProjects((prev) => prev.map((p) => p.id === updated.id ? updated : p))
-
-      // แจ้ง customer เจ้าของโปรเจค
-      addNotif({
-        type: "project",
-        title: "โปรเจคของคุณถูกอัปเดต",
-        message: `Admin แก้ไขโปรเจค "${updated.name}"${old?.status !== updated.status ? ` → สถานะเปลี่ยนเป็น "${STATUS_CONFIG[updated.status].label}"` : ""}`,
-        forUserId: updated.ownerId,
-      })
-      // แจ้ง admin ด้วย
-      addNotif({
-        type: "project",
-        title: "แก้ไขโปรเจคสำเร็จ",
-        message: `อัปเดต "${updated.name}" เรียบร้อย`,
-        forUserId: "all",
-      })
-    }
-    setEditingProject(null)
-    setIsCreating(false)
+  async function handleSave(updated: Project) {
+    try {
+      setError(null)
+      const payload = { name: updated.name, description: updated.description, domain: updated.domain || updated.website, start_date: updated.startDate, package: updated.package, token: updated.token }
+      if (isCreating) {
+        await backend.createProject(payload)
+      } else if (isAdmin) {
+        await backend.updateProject(updated.id, { status: updated.status, url: updated.website }, true)
+        await backend.updateProgress(updated.id, updated.progress)
+        const oldMembers = await backend.projectMembers(updated.id).catch(() => [])
+        const oldNames = new Set((Array.isArray(oldMembers) ? oldMembers : []).map((m: any) => m.name))
+        for (const manager of updated.managers) if (manager.name.trim() && !oldNames.has(manager.name.trim())) await backend.addProjectMember(updated.id, manager.name.trim())
+        const newNames = new Set(updated.managers.map((m) => m.name.trim()))
+        for (const manager of (Array.isArray(oldMembers) ? oldMembers : [])) if (!newNames.has(manager.name)) await backend.removeProjectMember(Number(manager.id))
+      } else {
+        await backend.updateProject(updated.id, payload, false)
+      }
+      setEditingProject(null)
+      setIsCreating(false)
+      await loadProjects()
+    } catch (err) { setError(err instanceof Error ? err.message : "บันทึกโปรเจคไม่สำเร็จ") }
   }
 
-  function handleDelete(id: number) {
-    const p = projects.find((x) => x.id === id)
-    setProjects((prev) => prev.filter((x) => x.id !== id))
-    if (p) {
-      addNotif({
-        type: "project",
-        title: "โปรเจคถูกลบ",
-        message: `Admin ลบโปรเจค "${p.name}" แล้ว`,
-        forUserId: p.ownerId,
-      })
-    }
-    setEditingProject(null)
+  async function handleDelete(id: number) {
+    try { await backend.deleteProject(id); setEditingProject(null); await loadProjects() }
+    catch (err) { setError(err instanceof Error ? err.message : "ลบโปรเจคไม่สำเร็จ") }
   }
 
   function openCreate() {
     setIsCreating(true)
-    setEditingProject({
-      id: 0, name: "", website: "", description: "",
-      status: "pending", progress: 0, startDate: "",
-      package: "Starter", domain: "", token: "",
-      ownerId: user.id, managers: [],
-    })
+    setEditingProject({ id: 0, name: "", website: "", description: "", status: "pending", progress: 0, startDate: "", package: "Starter", domain: "", token: "", ownerId: user.id, managers: [] })
   }
 
   return (
     <div style={S.page}>
+      {error && <div style={{ color: "#f87171", marginBottom: 14 }}>{error}</div>}
       <div style={S.header}>
         <div>
           <h1 style={S.title}>Projects</h1>

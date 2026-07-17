@@ -1,14 +1,15 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
 } from "recharts"
 import {
-  MOCK_CURRENT_USER, MOCK_PROJECTS, MOCK_MILESTONES,
   STATUS_CONFIG, MILESTONE_STATUS_CONFIG,
 } from "@/lib/mockData"
+import { backend, normalizeMilestone, normalizeProject } from "@/lib/backend"
+import { getUser, setUser, type AuthUser } from "@/lib/auth"
 
 const PROGRESS_OVER_TIME = [
   { week: "W1", progress: 0 },
@@ -30,16 +31,40 @@ const GIT_PULSE = [
 ]
 
 export default function DashboardPage() {
-  const user = MOCK_CURRENT_USER
+  const [user, setCurrentUser] = useState<AuthUser>(() => getUser() || ({ id: 0, username: "", role: "customer" } as AuthUser))
+  const [projects, setProjects] = useState<any[]>([])
+  const [milestones, setMilestones] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const isAdmin = user.role === "admin"
 
-  const projects = useMemo(() =>
-    isAdmin ? MOCK_PROJECTS : MOCK_PROJECTS.filter((p) => p.ownerId === user.id),
-    [isAdmin, user.id]
-  )
+  useEffect(() => {
+    let cancelled = false
+    async function loadDashboard() {
+      try {
+        const profile = await backend.profile()
+        if (cancelled) return
+        setCurrentUser(profile.user)
+        setUser(profile.user, Boolean(localStorage.getItem("nexus_token")))
+        const admin = profile.user.role === "admin"
+        const rawProjects = await backend.projects(admin)
+        const loadedProjects = (Array.isArray(rawProjects) ? rawProjects : []).map(normalizeProject)
+        const milestoneGroups = await Promise.all(loadedProjects.map((project) => backend.milestones(project.id).catch(() => [])))
+        if (!cancelled) {
+          setProjects(loadedProjects)
+          setMilestones(milestoneGroups.flat().map(normalizeMilestone))
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "โหลดข้อมูล Dashboard ไม่สำเร็จ")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadDashboard()
+    return () => { cancelled = true }
+  }, [])
 
   const projectIds = projects.map((p) => p.id)
-  const milestones = MOCK_MILESTONES.filter((m) => projectIds.includes(m.projectId))
 
   const totalProjects = projects.length
   const completedProjects = projects.filter((p) => p.status === "completed").length
@@ -60,6 +85,8 @@ export default function DashboardPage() {
 
   return (
     <div style={S.page}>
+      {error && <div style={{ marginBottom: 16, color: "#f87171", fontSize: 13 }}>{error}</div>}
+      {loading && <div style={{ marginBottom: 16, color: "#6b7280", fontSize: 13 }}>กำลังโหลดข้อมูล...</div>}
       <div style={{ marginBottom: 28 }}>
         <h1 style={S.title}>Dashboard</h1>
         <p style={S.subtitle}>
@@ -179,7 +206,7 @@ export default function DashboardPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {upcomingMilestones.slice(0, 4).map((m) => {
-                const proj = MOCK_PROJECTS.find((p) => p.id === m.projectId)
+                const proj = projects.find((p) => p.id === m.projectId)
                 const { color, label } = MILESTONE_STATUS_CONFIG[m.status]
                 return (
                   <div key={m.id} style={{ borderLeft: `3px solid ${color}`, paddingLeft: 12, display: "flex", flexDirection: "column", gap: 3 }}>

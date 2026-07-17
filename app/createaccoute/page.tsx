@@ -1,22 +1,43 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 export default function CreateAccountPage() {
+	const router = useRouter();
 	const [showPassword, setShowPassword] = useState(false);
 	const [username, setUsername] = useState("");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [loading, setLoading] = useState(false);
 
-	const handleSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
+	const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
 		e.preventDefault();
+		setError(null);
 		if (password !== confirmPassword) {
-			alert("Password and confirmation do not match");
+			setError("รหัสผ่านกับยืนยันรหัสผ่านไม่ตรงกัน");
 			return;
 		}
-		console.log({ username, email, password });
-		// TODO: call create-account API
+		if (!username || !email || !password) {
+			setError("กรุณากรอกข้อมูลให้ครบทุกช่อง");
+			return;
+		}
+
+		setLoading(true);
+		try {
+			await apiFetch("/api/register", {
+				method: "POST",
+				body: JSON.stringify({ username, email, password, role: "customer" }),
+			});
+			router.push("/login");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "ไม่สามารถสร้างบัญชีได้");
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	return (
@@ -96,8 +117,9 @@ export default function CreateAccountPage() {
 							onClick={handleSubmit}
 							className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm font-medium transition-all"
 						>
-							Create account
+							{loading ? "กำลังสร้างบัญชี..." : "Create account"}
 						</button>
+						{error && <p className="text-sm text-red-500 text-center">{error}</p>}
 						<div className="mt-4 text-center">
 							<a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">มีบัญชีแล้ว? เข้าสู่ระบบ</a>
 						</div>

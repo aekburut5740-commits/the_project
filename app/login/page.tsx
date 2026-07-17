@@ -1,18 +1,51 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { setToken, setUser } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    console.log({ username, email, password, remember });
-    // TODO: เพิ่ม logic การเรียก API ที่นี่
+    setError(null);
+    if (!username && !email) {
+      setError("กรุณากรอก username หรือ email");
+      return;
+    }
+    if (!password) {
+      setError("กรุณากรอกรหัสผ่าน");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const loginValue = username || email;
+      const data = await apiFetch("/api/login", {
+        method: "POST",
+        body: JSON.stringify({ username: loginValue, password }),
+      });
+      if (data?.token) {
+        setToken(data.token, remember);
+        if (data.user) setUser(data.user, remember);
+        router.push("/dashboard");
+      } else {
+        setError(data?.message || "เข้าสู่ระบบไม่สำเร็จ");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -114,8 +147,9 @@ export default function LoginPage() {
               onClick={handleSubmit}
               className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm font-medium transition-all"
             >
-              Login
+              {loading ? "กำลังเข้าสู่ระบบ..." : "Login"}
             </button>
+            {error && <p className="text-sm text-red-500 text-center">{error}</p>}
             <div className="mt-4 text-center">
               <a href="/createaccoute" className="text-sm font-medium text-indigo-600 hover:underline">ยังไม่มีบัญชี? สร้างบัญชีใหม่</a>
             </div>

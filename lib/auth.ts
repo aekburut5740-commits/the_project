@@ -1,46 +1,52 @@
-import { jwtDecode } from "jwt-decode"
-
-export type UserRole = "admin" | "customer"
-
-export interface JwtUser {
+export type AuthUser = {
   id: number
   username: string
-  role: UserRole
-  iat?: number
-  exp?: number
+  email?: string
+  role: "admin" | "customer" | string
+  [key: string]: unknown
 }
 
-export function getToken(): string | null {
+const TOKEN_KEY = "nexus_token"
+const USER_KEY = "nexus_user"
+
+export function setToken(token: string, remember = true) {
+  const storage = remember ? localStorage : sessionStorage
+  const other = remember ? sessionStorage : localStorage
+  other.removeItem(TOKEN_KEY)
+  storage.setItem(TOKEN_KEY, token)
+}
+
+export function getToken() {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("token")
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY)
 }
 
-export function setToken(token: string) {
-  localStorage.setItem("token", token)
+export function setUser(user: AuthUser, remember = true) {
+  const storage = remember ? localStorage : sessionStorage
+  const other = remember ? sessionStorage : localStorage
+  other.removeItem(USER_KEY)
+  storage.setItem(USER_KEY, JSON.stringify(user))
 }
 
-export function removeToken() {
-  localStorage.removeItem("token")
+export function getUser(): AuthUser | null {
+  if (typeof window === "undefined") return null
+  const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY)
+  if (!raw) return decodeToken(getToken())
+  try { return JSON.parse(raw) as AuthUser } catch { return decodeToken(getToken()) }
 }
 
-export function getUser(): JwtUser | null {
-  const token = getToken()
-  if (!token) return null
-  try {
-    return jwtDecode<JwtUser>(token)
-  } catch {
-    return null
+export function clearAuth() {
+  if (typeof window === "undefined") return
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem(TOKEN_KEY)
+    storage.removeItem(USER_KEY)
   }
 }
 
-export function isTokenExpired(): boolean {
-  const user = getUser()
-  if (!user?.exp) return true
-  return Date.now() / 1000 > user.exp
-}
-
-export function authHeader(): { Authorization: string } | {} {
-  const token = getToken()
-  if (!token) return {}
-  return { Authorization: `Bearer ${token}` }
+function decodeToken(token: string | null): AuthUser | null {
+  if (!token) return null
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
+    return payload as AuthUser
+  } catch { return null }
 }
