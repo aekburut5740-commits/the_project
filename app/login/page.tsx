@@ -1,51 +1,33 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { setToken } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    setError(null);
-    if (!username && !email) {
-      setError("กรุณากรอก username หรือ email");
-      return;
+ const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.preventDefault()
+  try {
+    const res = await fetch('http://localhost:4000/api/login', {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json()
+    if (data.token) {
+      localStorage.setItem('token', data.token)
+      window.location.href = '/dashboard'
     }
-    if (!password) {
-      setError("กรุณากรอกรหัสผ่าน");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const loginValue = username || email;
-      const data = await apiFetch("/api/login", {
-        method: "POST",
-        body: JSON.stringify({ username: loginValue, password }),
-      });
-      if (data?.token) {
-        setToken(data.token);
-        router.push("/dashboard");
-      } else {
-        setError(data?.message || "เข้าสู่ระบบไม่สำเร็จ");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (error) {
+    console.error("Error occurred while logging in:", error);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -234,4 +216,3 @@ function GitHubIcon() {
     </svg>
   );
 }
-
