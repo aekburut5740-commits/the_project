@@ -43,7 +43,16 @@ export const backend = {
 }
 
 export function normalizeProject(p: any) {
-  return { ...p, id: Number(p.id), ownerId: Number(p.ownerId ?? p.user_id ?? p.userId ?? 0), startDate: p.startDate ?? p.start_date ?? "", progress: Number(p.progress ?? 0), status: p.status ?? "pending", managers: p.managers ?? [] }
+  return {    ...p, 
+    id: Number(p.id), 
+    ownerId: Number(p.ownerId ?? p.user_id ?? p.userId ?? 0), 
+    startDate: p.startDate ?? p.start_date ?? "", 
+    progress: Number(p.progress ?? 0), 
+    status: p.status ?? "pending", 
+    managers: p.managers ?? [],
+    domain: p.domain ?? "",
+    package: p.package ?? "",
+    token: p.token ?? "",}
 }
 export function normalizeMilestone(m: any) {
   return { ...m, id: Number(m.id), projectId: Number(m.projectId ?? m.project_id), dueDate: m.dueDate ?? m.end_date ?? "", startDate: m.startDate ?? m.start_date ?? "", progress: Number(m.progress ?? 0), status: m.status ?? "upcoming", tasks: m.tasks ?? [] }
