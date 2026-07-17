@@ -30,7 +30,7 @@ export default function CreateAccountPage() {
 		try {
 			await apiFetch("/api/register", {
 				method: "POST",
-				body: JSON.stringify({ username, email, password, role: "customer" }),
+				body: JSON.stringify({ username, email, password }),
 			});
 			router.push("/login");
 		} catch (err) {
@@ -117,9 +117,8 @@ export default function CreateAccountPage() {
 							onClick={handleSubmit}
 							className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm font-medium transition-all"
 						>
-							{loading ? "กำลังสร้างบัญชี..." : "Create account"}
+							Create account
 						</button>
-						{error && <p className="text-sm text-red-500 text-center">{error}</p>}
 						<div className="mt-4 text-center">
 							<a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">มีบัญชีแล้ว? เข้าสู่ระบบ</a>
 						</div>

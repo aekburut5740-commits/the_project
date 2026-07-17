@@ -1,268 +1,275 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
-} from "recharts"
-import {
-  STATUS_CONFIG, MILESTONE_STATUS_CONFIG,
-} from "@/lib/mockData"
-import { backend, normalizeMilestone, normalizeProject } from "@/lib/backend"
-import { getUser, setUser, type AuthUser } from "@/lib/auth"
+import React, { useRef, useState } from "react"
+import Link from "next/link"
+import { Camera, Bell, User as UserIcon, Mail, Lock, ArrowRight } from "lucide-react"
+import { MOCK_CURRENT_USER, MOCK_USERS, type User } from "@/lib/mockData"
 
-const PROGRESS_OVER_TIME = [
-  { week: "W1", progress: 0 },
-  { week: "W2", progress: 15 },
-  { week: "W3", progress: 28 },
-  { week: "W4", progress: 45 },
-  { week: "W5", progress: 58 },
-  { week: "W6", progress: 65 },
-]
-
-const GIT_PULSE = [
-  { day: "จ", commits: 4 },
-  { day: "อ", commits: 7 },
-  { day: "พ", commits: 2 },
-  { day: "พฤ", commits: 9 },
-  { day: "ศ", commits: 5 },
-  { day: "ส", commits: 1 },
-  { day: "อา", commits: 0 },
-]
-
-export default function DashboardPage() {
-  const [user, setCurrentUser] = useState<AuthUser>(() => getUser() || ({ id: 0, username: "", role: "customer" } as AuthUser))
-  const [projects, setProjects] = useState<any[]>([])
-  const [milestones, setMilestones] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export default function SettingsPage() {
+  const user = MOCK_CURRENT_USER
   const isAdmin = user.role === "admin"
+  const [username, setUsername] = useState(user.username)
+  const [email, setEmail] = useState(() => `${user.username.replace(/_/g, ".")}@example.com`)
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [users, setUsers] = useState<import("@/lib/mockData").User[]>(MOCK_USERS)
+  const [maintenanceMode, setMaintenanceMode] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [avatar, setAvatar] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadDashboard() {
-      try {
-        const profile = await backend.profile()
-        if (cancelled) return
-        setCurrentUser(profile.user)
-        setUser(profile.user, Boolean(localStorage.getItem("nexus_token")))
-        const admin = profile.user.role === "admin"
-        const rawProjects = await backend.projects(admin)
-        const loadedProjects = (Array.isArray(rawProjects) ? rawProjects : []).map(normalizeProject)
-        const milestoneGroups = await Promise.all(loadedProjects.map((project) => backend.milestones(project.id).catch(() => [])))
-        if (!cancelled) {
-          setProjects(loadedProjects)
-          setMilestones(milestoneGroups.flat().map(normalizeMilestone))
-        }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "โหลดข้อมูล Dashboard ไม่สำเร็จ")
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    loadDashboard()
-    return () => { cancelled = true }
-  }, [])
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setAvatar(reader.result as string)
+    reader.readAsDataURL(file)
+  }
 
-  const projectIds = projects.map((p) => p.id)
+  function toggleNotifications() {
+    setNotificationsEnabled((current) => !current)
+  }
 
-  const totalProjects = projects.length
-  const completedProjects = projects.filter((p) => p.status === "completed").length
-  const inProgressProjects = projects.filter((p) => p.status === "in_progress").length
-  const avgProgress = totalProjects
-    ? Math.round(projects.reduce((s, p) => s + p.progress, 0) / totalProjects)
-    : 0
-  const overdueMilestones = milestones.filter((m) => m.status === "overdue").length
-  const upcomingMilestones = milestones.filter((m) => m.status === "upcoming" || m.status === "in_progress")
+  const initials = username
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
 
-  const healthData = [
-    { name: "เสร็จแล้ว",      value: completedProjects,                                        color: "#34d399" },
-    { name: "กำลังดำเนินการ", value: inProgressProjects,                                       color: "#4f8ef7" },
-    { name: "รอดำเนินการ",    value: projects.filter((p) => p.status === "pending").length,    color: "#fbbf24" },
-  ].filter((d) => d.value > 0)
+  const [activeTab, setActiveTab] = useState<"account" | "notifications" | "users" | "system">("account")
 
-  const emptyDonut = [{ name: "ว่าง", value: 1, color: "#1f2937" }]
+  function toggleMaintenance() {
+    setMaintenanceMode((current) => !current)
+  }
+
+  function toggleUserRole(id: number) {
+    setUsers((current) => current.map((item) =>
+      item.id === id
+        ? { ...item, role: item.role === "admin" ? "customer" : "admin" }
+        : item
+    ))
+  }
+
+  function deleteUser(id: number) {
+    if (id === user.id) return
+    setUsers((current) => current.filter((item) => item.id !== id))
+  }
 
   return (
-    <div style={S.page}>
-      {error && <div style={{ marginBottom: 16, color: "#f87171", fontSize: 13 }}>{error}</div>}
-      {loading && <div style={{ marginBottom: 16, color: "#6b7280", fontSize: 13 }}>กำลังโหลดข้อมูล...</div>}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={S.title}>Dashboard</h1>
-        <p style={S.subtitle}>
-          {isAdmin ? "ภาพรวมทุกโปรเจค" : `โปรเจคของคุณ · ${user.username}`}
-        </p>
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <span style={{
-          ...S.roleBadge,
-          background: isAdmin ? "#4f8ef722" : "#34d39922",
-          color: isAdmin ? "#4f8ef7" : "#34d399",
-          border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}`,
-        }}>
-          {isAdmin ? "👑 Admin — เห็นข้อมูลทั้งหมด" : "👤 Customer — เห็นเฉพาะโปรเจคของคุณ"}
-        </span>
-      </div>
-
-      {/* Stats */}
-      <div style={S.statsRow}>
-        {[
-          { label: "โปรเจคทั้งหมด",     value: totalProjects,      color: "#4f8ef7", icon: "◎" },
-          { label: "ความคืบหน้าเฉลี่ย", value: `${avgProgress}%`,  color: "#a78bfa", icon: "📊" },
-          { label: "กำลังดำเนินการ",    value: inProgressProjects, color: "#fbbf24", icon: "⏳" },
-          { label: "เสร็จแล้ว",          value: completedProjects,  color: "#34d399", icon: "✓" },
-          { label: "Milestone เลยกำหนด", value: overdueMilestones,  color: "#f87171", icon: "⚠" },
-        ].map((s) => (
-          <div key={s.label} style={{ ...S.statCard, borderTopColor: s.color }}>
-            <div style={{ fontSize: 20 }}>{s.icon}</div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: "#f9fafb", fontFamily: "monospace" }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>{s.label}</div>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-semibold text-white">Settings</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-400">
+              จัดการข้อมูลบัญชีและการแจ้งเตือนหลัก โดยไม่ซ้ำกับหน้าการแจ้งเตือนหลักของระบบ
+            </p>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Row 2 */}
-      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 14, marginBottom: 14 }}>
-        <SectionCard title="Project Health">
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <PieChart width={150} height={150}>
-              <Pie data={healthData.length ? healthData : emptyDonut} cx={70} cy={70} innerRadius={45} outerRadius={68} dataKey="value" paddingAngle={2}>
-                {(healthData.length ? healthData : emptyDonut).map((e) => <Cell key={e.name} fill={e.color} />)}
-              </Pie>
-            </PieChart>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {Object.entries(STATUS_CONFIG).map(([key, { label, color }]) => {
-              const count = projects.filter((p) => p.status === key).length
-              return (
-                <div key={key} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
-                    <span style={{ color: "#9ca3af" }}>{label}</span>
-                  </div>
-                  <span style={{ color: "#4b5563", fontFamily: "monospace" }}>{count}</span>
+        <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+          <aside className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/20">
+            <p className="text-sm uppercase tracking-[0.22em] text-slate-500">เมนู Setting</p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("account")}
+                className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "account" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
+              >
+                ข้อมูลบัญชี
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("notifications")}
+                className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "notifications" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
+              >
+                Notifications
+              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("users")}
+                    className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "users" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
+                  >
+                    จัดการผู้ใช้
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("system")}
+                    className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "system" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
+                  >
+                    ระบบ
+                  </button>
+                </>
+              )}
+            </div>
+          </aside>
+
+          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl shadow-black/20">
+            {activeTab === "account" ? (
+              <>
+                <div className="mb-8">
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">ข้อมูลบัญชี</p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">แก้ไขข้อมูลบัญชี</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                    ปรับชื่อผู้ใช้งานและอีเมลได้จากที่นี่ หากต้องการเปลี่ยนรหัสผ่านให้ใช้ฟอร์มด้านล่าง
+                  </p>
                 </div>
-              )
-            })}
-          </div>
-        </SectionCard>
 
-        <SectionCard title={isAdmin ? "โปรเจคทั้งหมด" : "โปรเจคของฉัน"}>
-          {projects.length === 0 ? (
-            <div style={S.empty}>ยังไม่มีโปรเจค</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {projects.map((p) => {
-                const { color } = STATUS_CONFIG[p.status]
-                return (
-                  <div key={p.id} style={S.projectRow}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#f9fafb", marginBottom: 6 }}>
-                        {p.name}
-                        {isAdmin && <span style={{ fontSize: 11, color: "#4b5563", marginLeft: 8 }}>#{p.id}</span>}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, background: "#1f2937", borderRadius: 999, height: 5, overflow: "hidden" }}>
-                          <div style={{ width: `${p.progress}%`, height: "100%", background: color, borderRadius: 999 }} />
-                        </div>
-                        <span style={{ fontSize: 11, color: "#6b7280", fontFamily: "monospace", flexShrink: 0 }}>{p.progress}%</span>
-                      </div>
-                    </div>
-                    <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>
-                      {STATUS_CONFIG[p.status].label}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </SectionCard>
-      </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-4">
+                    <span className="text-sm font-semibold text-slate-300">ชื่อผู้ใช้งาน</span>
+                    <input
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="mt-3 w-full bg-transparent text-white outline-none"
+                    />
+                  </label>
+                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-4">
+                    <span className="text-sm font-semibold text-slate-300">อีเมล</span>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="mt-3 w-full bg-transparent text-white outline-none"
+                    />
+                  </label>
+                </div>
 
-      {/* Row 3 */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 14, marginBottom: 14 }}>
-        <SectionCard title="ความคืบหน้าตามเวลา">
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={PROGRESS_OVER_TIME} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4f8ef7" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#4f8ef7" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="week" tick={{ fill: "#4b5563", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#4b5563", fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-              <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 8, fontSize: 12, color: "#e5e7eb" }} />
-              <Area type="monotone" dataKey="progress" stroke="#4f8ef7" strokeWidth={2} fill="url(#pg)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </SectionCard>
-
-        <SectionCard title="Milestone ที่กำลังจะมา">
-          {upcomingMilestones.length === 0 ? (
-            <div style={S.empty}>ไม่มี milestone ที่รอดำเนินการ</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {upcomingMilestones.slice(0, 4).map((m) => {
-                const proj = projects.find((p) => p.id === m.projectId)
-                const { color, label } = MILESTONE_STATUS_CONFIG[m.status]
-                return (
-                  <div key={m.id} style={{ borderLeft: `3px solid ${color}`, paddingLeft: 12, display: "flex", flexDirection: "column", gap: 3 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#f9fafb" }}>{m.title}</div>
-                    <div style={{ fontSize: 11, color: "#6b7280" }}>{proj?.name}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, color }}>● {label}</span>
-                      <span style={{ fontSize: 11, color: "#4b5563" }}>
-                        {new Date(m.dueDate).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}
-                      </span>
+                <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
+                  <div className="flex items-center gap-3 text-slate-300">
+                    <Lock size={18} />
+                    <div>
+                      <p className="text-sm font-semibold">เปลี่ยนรหัสผ่าน</p>
+                      <p className="text-sm text-slate-500">ตั้งค่ารหัสผ่านใหม่หรือรีเซ็ตรหัสผ่านได้ที่นี่</p>
                     </div>
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </SectionCard>
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input placeholder="รหัสผ่านใหม่" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
+                    <input placeholder="ยืนยันรหัสผ่าน" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400">บันทึกการเปลี่ยนแปลงข้อมูลบัญชี</p>
+                  </div>
+                  <button type="button" className="inline-flex items-center justify-center rounded-3xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition">
+                    บันทึกการตั้งค่า
+                  </button>
+                </div>
+              </>
+            ) : activeTab === "notifications" ? (
+              <>
+                <div className="mb-8">
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Notifications</p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">ตั้งค่าการแจ้งเตือน</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                    เปิด/ปิดการแจ้งเตือนหลักของระบบที่เกี่ยวข้องกับหน้าการแจ้งเตือนโดยรวม
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-white">เปิด/ปิดการแจ้งเตือน</p>
+                      <p className="mt-2 text-sm text-slate-400">ควบคุมการแจ้งเตือนหลักของระบบในส่วนที่เกี่ยวข้องกับ user account</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleNotifications}
+                      className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${notificationsEnabled ? "bg-sky-500 text-slate-950" : "bg-slate-800 text-slate-200"}`}
+                    >
+                      <Bell size={16} className="mr-2" />
+                      {notificationsEnabled ? "เปิดแล้ว" : "ปิดแล้ว"}
+                    </button>
+                  </div>
+
+                  <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-400">
+                    ปุ่มนี้สำหรับตั้งค่าการแจ้งเตือนของบัญชีโดยตรง หากต้องการจัดการ notification ทั้งหมด โปรดไปที่หน้าการแจ้งเตือนหลัก
+                  </div>
+
+                  <Link href="/dashboard/notifications"
+                    className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/75 px-4 py-3 text-sm font-semibold text-slate-100 hover:border-slate-600 hover:bg-slate-900 transition"
+                  >
+                    ไปที่ Notifications
+                    <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </>
+            ) : activeTab === "users" ? (
+              <>
+                <div className="mb-8">
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">จัดการผู้ใช้</p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">ดูรายชื่อ User ทั้งหมด</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                    แก้ไข Role ของผู้ใช้ หรือ ลบผู้ใช้ได้จากที่นี่ โดยเฉพาะสำหรับ admin
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {users.map((item) => (
+                    <div key={item.id} className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-white">{item.username}</div>
+                        <div className="mt-1 text-sm text-slate-400">Role: {item.role}</div>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleUserRole(item.id)}
+                          className="inline-flex items-center justify-center rounded-3xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-700 transition"
+                        >
+                          เปลี่ยนเป็น {item.role === "admin" ? "customer" : "admin"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={item.id === user.id}
+                          onClick={() => deleteUser(item.id)}
+                          className="inline-flex items-center justify-center rounded-3xl border border-slate-700 bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400 transition disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          ลบ User
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-8">
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">ระบบ</p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">เปิด/ปิด Maintenance Mode</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                    ปิดระบบหรือเปิดให้เข้าบางส่วนเมื่อกำลังบำรุงรักษา สามารถใช้ฟีเจอร์นี้เฉพาะ admin เท่านั้น
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Maintenance Mode</p>
+                      <p className="mt-2 text-sm text-slate-400">เปลี่ยนการเข้าถึงระบบขณะบำรุงรักษา</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleMaintenance}
+                      className={`${maintenanceMode ? "bg-rose-500 text-white" : "bg-slate-800 text-slate-200"} inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition`}
+                    >
+                      {maintenanceMode ? "เปิดอยู่" : "ปิดอยู่"}
+                    </button>
+                  </div>
+
+                  <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-400">
+                    เมื่อเปิด Maintenance mode หน้าไซต์จะอยู่ในสถานะบำรุงรักษาและจำกัดการเข้าถึงสำหรับผู้ใช้ทั่วไป (ตัวอย่างนี้เป็นสถานะภายใน)
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
       </div>
-
-      {/* Git Pulse — admin only */}
-      {isAdmin && (
-        <SectionCard title="Git Pulse — commits รายสัปดาห์">
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={GIT_PULSE} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: "#4b5563", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#4b5563", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 8, fontSize: 12, color: "#e5e7eb" }} />
-              <Bar dataKey="commits" radius={[4, 4, 0, 0]}>
-                {GIT_PULSE.map((_, i) => <Cell key={i} fill="#4f8ef7" opacity={0.75} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </SectionCard>
-      )}
     </div>
   )
-}
-
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", letterSpacing: "0.08em", textTransform: "uppercase" as const }}>{title}</div>
-      {children}
-    </div>
-  )
-}
-
-const S: Record<string, React.CSSProperties> = {
-  page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },
-  title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
-  roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
-  statsRow: { display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" },
-  statCard: { background: "#111827", border: "1px solid #1f2937", borderTop: "3px solid", borderRadius: 12, padding: "16px 18px", flex: "1 1 130px", display: "flex", flexDirection: "column", gap: 4 },
-  projectRow: { display: "flex", alignItems: "center", gap: 14, background: "#0d1117", border: "1px solid #1a2232", borderRadius: 10, padding: "12px 14px" },
-  badge: { fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" as const, flexShrink: 0 },
-  empty: { color: "#374151", fontSize: 13, textAlign: "center", padding: "24px 0", fontStyle: "italic" },
 }

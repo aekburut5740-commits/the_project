@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { setToken, setUser } from "@/lib/auth";
+import { setToken } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 
 export default function LoginPage() {
@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-<<<<<<< HEAD
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setError(null);
@@ -36,8 +35,7 @@ export default function LoginPage() {
         body: JSON.stringify({ username: loginValue, password }),
       });
       if (data?.token) {
-        setToken(data.token, remember);
-        if (data.user) setUser(data.user, remember);
+        setToken(data.token);
         router.push("/dashboard");
       } else {
         setError(data?.message || "เข้าสู่ระบบไม่สำเร็จ");
@@ -48,27 +46,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-=======
- const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
-  e.preventDefault()
-  try {
-    const res = await fetch('http://localhost:4000/api/login', {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ username, email, password })
-    });
-    const data = await res.json()
-    if (data.token) {
-      localStorage.setItem('token', data.token)
-      window.location.href = '/dashboard'
-    }
-  } catch (error) {
-    console.error("Error occurred while logging in:", error);
-  }
-};
->>>>>>> 645b696d430c5a4d9701086fb670baf5df98edbf
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -169,9 +146,8 @@ export default function LoginPage() {
               onClick={handleSubmit}
               className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm font-medium transition-all"
             >
-              {loading ? "กำลังเข้าสู่ระบบ..." : "Login"}
+              Login
             </button>
-            {error && <p className="text-sm text-red-500 text-center">{error}</p>}
             <div className="mt-4 text-center">
               <a href="/createaccoute" className="text-sm font-medium text-indigo-600 hover:underline">ยังไม่มีบัญชี? สร้างบัญชีใหม่</a>
             </div>

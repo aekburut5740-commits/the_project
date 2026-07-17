@@ -42,9 +42,9 @@ new Elysia()
   })
 
   .post("/api/login", async ({ body }) => {
-    const { username, email, password } = body as any
+    const { username, password } = body as any
     try {
-      const result = await login(username || email, password)
+      const result = await login(username, password)
       return result
     } catch (err: any) {
       return { message: err.message }

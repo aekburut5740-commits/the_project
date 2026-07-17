@@ -1,299 +1,83 @@
-"use client"
-
-import { useEffect, useState } from "react"
 import Link from "next/link"
-import { STATUS_CONFIG, type Project, type ProjectStatus } from "@/lib/mockData"
-import { backend, normalizeProject } from "@/lib/backend"
-import { getUser, type AuthUser } from "@/lib/auth"
+import { notFound } from "next/navigation"
+import { MOCK_PROJECTS, STATUS_CONFIG } from "@/lib/mockData"
 
-const PACKAGES = ["Starter", "Professional", "Enterprise"]
-
-export default function ProjectsPage() {
-  const [user, setUser] = useState<AuthUser>(() => getUser() || ({ id: 0, username: "", role: "customer" } as AuthUser))
-  const [projects, setProjects] = useState<Project[]>([])
-  const [search, setSearch] = useState("")
-  const [filterStatus, setFilterStatus] = useState<ProjectStatus | "all">("all")
-  const [editingProject, setEditingProject] = useState<Project | null>(null)
-  const [isCreating, setIsCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const isAdmin = user.role === "admin"
-
-  async function loadProjects() {
-    try {
-      setError(null)
-      const profile = await backend.profile()
-      setUser(profile.user)
-      const raw = await backend.projects(profile.user.role === "admin")
-      const normalized = await Promise.all((Array.isArray(raw) ? raw : []).map(async (item) => {
-        const project = normalizeProject(item)
-        try {
-          const members = await backend.projectMembers(project.id)
-          project.managers = (Array.isArray(members) ? members : []).map((m: any) => ({ id: Number(m.id), name: m.name, avatar: getInitials(m.name), color: "#4f8ef7" }))
-        } catch {}
-        project.website = project.website || project.domain || ""
-        return project as Project
-      }))
-      setProjects(normalized)
-    } catch (err) { setError(err instanceof Error ? err.message : "โหลดโปรเจคไม่สำเร็จ") }
-  }
-
-  useEffect(() => { void loadProjects() }, [])
-
-  const filtered = projects.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.website || "").toLowerCase().includes(search.toLowerCase())
-    const matchStatus = filterStatus === "all" || p.status === filterStatus
-    return matchSearch && matchStatus
-  })
-
-  async function handleSave(updated: Project) {
-    try {
-      setError(null)
-      const payload = { name: updated.name, description: updated.description, domain: updated.domain || updated.website, start_date: updated.startDate, package: updated.package, token: updated.token }
-      if (isCreating) {
-        await backend.createProject(payload)
-      } else if (isAdmin) {
-        await backend.updateProject(updated.id, { status: updated.status, url: updated.website }, true)
-        await backend.updateProgress(updated.id, updated.progress)
-        const oldMembers = await backend.projectMembers(updated.id).catch(() => [])
-        const oldNames = new Set((Array.isArray(oldMembers) ? oldMembers : []).map((m: any) => m.name))
-        for (const manager of updated.managers) if (manager.name.trim() && !oldNames.has(manager.name.trim())) await backend.addProjectMember(updated.id, manager.name.trim())
-        const newNames = new Set(updated.managers.map((m) => m.name.trim()))
-        for (const manager of (Array.isArray(oldMembers) ? oldMembers : [])) if (!newNames.has(manager.name)) await backend.removeProjectMember(Number(manager.id))
-      } else {
-        await backend.updateProject(updated.id, payload, false)
-      }
-      setEditingProject(null)
-      setIsCreating(false)
-      await loadProjects()
-    } catch (err) { setError(err instanceof Error ? err.message : "บันทึกโปรเจคไม่สำเร็จ") }
-  }
-
-  async function handleDelete(id: number) {
-    try { await backend.deleteProject(id); setEditingProject(null); await loadProjects() }
-    catch (err) { setError(err instanceof Error ? err.message : "ลบโปรเจคไม่สำเร็จ") }
-  }
-
-  function openCreate() {
-    setIsCreating(true)
-    setEditingProject({ id: 0, name: "", website: "", description: "", status: "pending", progress: 0, startDate: "", package: "Starter", domain: "", token: "", ownerId: user.id, managers: [] })
-  }
-
-  return (
-    <div style={S.page}>
-      {error && <div style={{ color: "#f87171", marginBottom: 14 }}>{error}</div>}
-      <div style={S.header}>
-        <div>
-          <h1 style={S.title}>Projects</h1>
-          <p style={S.subtitle}>
-            {isAdmin ? `${projects.length} โปรเจคทั้งหมด` : `${projects.length} โปรเจคของคุณ`}
-          </p>
-        </div>
-        {isAdmin && <button onClick={openCreate} style={S.addBtn}>+ เพิ่มโปรเจค</button>}
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <span style={{ ...S.roleBadge, background: isAdmin ? "#4f8ef722" : "#34d39922", color: isAdmin ? "#4f8ef7" : "#34d399", border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}` }}>
-          {isAdmin ? "👑 Admin — เห็นและแก้ไขได้ทุกโปรเจค" : "👤 Customer — เห็นเฉพาะโปรเจคของคุณ"}
-        </span>
-      </div>
-
-      <div style={S.filterRow}>
-        <input placeholder="ค้นหาโปรเจค..." value={search} onChange={(e) => setSearch(e.target.value)} style={S.searchInput} />
-        <div style={S.tabGroup}>
-          {(["all", "pending", "in_progress", "completed"] as const).map((s) => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              style={{ ...S.tabBtn, background: filterStatus === s ? "#1f2937" : "transparent", color: filterStatus === s ? "#f9fafb" : "#6b7280" }}>
-              {s === "all" ? "ทั้งหมด" : STATUS_CONFIG[s].label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {filtered.length === 0 ? <div style={S.empty}>ไม่พบโปรเจค</div> : (
-        <div style={S.grid}>
-          {filtered.map((project) => (
-            <ProjectCard key={project.id} project={project} isAdmin={isAdmin}
-              onEdit={() => { setIsCreating(false); setEditingProject(project) }} />
-          ))}
-        </div>
-      )}
-
-      {editingProject && isAdmin && (
-        <EditModal project={editingProject} isCreating={isCreating}
-          onClose={() => { setEditingProject(null); setIsCreating(false) }}
-          onSave={handleSave} onDelete={handleDelete} />
-      )}
-    </div>
-  )
-}
-
-function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmin: boolean; onEdit: () => void }) {
-  const { color, label } = STATUS_CONFIG[p.status]
-  const detailHref = `/dashboard/projects/${p.id}`
-
-  return (
-    <div style={{ ...S.card, padding: "15px 15px 5px 15px", overflow: "hidden" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={S.cardName}>{p.name}</div>
-          <a
-            href={`https://${p.website}`}
-            target="_blank"
-            rel="noreferrer"
-            style={S.cardWebsite}
-            onClick={(e) => e.stopPropagation()}
-          >
-            🌐 {p.website}
-          </a>
-        </div>
-        <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>{label}</span>
-      </div>
-      <p style={S.cardDesc}>{p.description}</p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-          <span style={{ color: "#6b7280" }}>ความคืบหน้า</span>
-          <span style={{ color: "#f9fafb", fontWeight: 700, fontFamily: "monospace" }}>{p.progress}%</span>
-        </div>
-        <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${p.progress}%`, background: color }} /></div>
-      </div>
-      <div style={S.metaRow}>
-        <div style={S.metaItem}>
-          <span style={S.metaLabel}>เริ่มต้น</span>
-          <span style={S.metaValue}>{new Date(p.startDate).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}</span>
-        </div>
-        <div style={S.metaItem}>
-          <span style={S.metaLabel}>แพ็กเกจ</span>
-          <span style={{ ...S.metaValue, color: "#a78bfa" }}>{p.package}</span>
-        </div>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex" }}>
-          {p.managers.map((m, i) => (
-            <div key={m.id} title={m.name} style={{ width: 28, height: 28, borderRadius: "50%", background: m.color + "33", color: m.color, border: "2px solid #111827", marginLeft: i > 0 ? -8 : 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, position: "relative", zIndex: p.managers.length - i }}>
-              {m.avatar}
-            </div>
-          ))}
-        </div>
-      </div>
-      <Link
-        href={detailHref}
-        style={{ padding:"3px",margin:"0px 0px 10px 0px", textAlign: "center", fontSize: 16, fontWeight: 200, background: color + "22", color, border: "1px solid gray", borderRadius:"14px 14px 14px 14px" }}
-      >detail</Link>
-      {isAdmin && (
-        <div style={{ borderTop: "1px solid #1f2937", padding: "12px 22px 20px", display: "flex", justifyContent: "flex-end" }}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit()
-            }}
-            style={S.editBtn}
-          >
-            แก้ไข
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
-  project: Project; isCreating: boolean
-  onClose: () => void; onSave: (p: Project) => void; onDelete: (id: number) => void
+export default async function ProjectDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
 }) {
-  const [form, setForm] = useState<Project>({ ...project, managers: project.managers.map((manager) => ({ ...manager })) })
+  const { id } = await params
+  const project = MOCK_PROJECTS.find((item) => item.id === Number(id))
 
-  function set(key: keyof Project, value: any) { setForm((prev) => ({ ...prev, [key]: value })) }
-
-  function updateManager(index: number, name: string) {
-    setForm((prev) => ({
-      ...prev,
-      managers: prev.managers.map((manager, managerIndex) =>
-        managerIndex === index
-          ? { ...manager, name, avatar: getInitials(name) || manager.avatar }
-          : manager
-      ),
-    }))
+  if (!project) {
+    notFound()
   }
 
-  function addManager() {
-    setForm((prev) => ({
-      ...prev,
-      managers: [
-        ...prev.managers,
-        {
-          id: Date.now(),
-          name: "",
-          avatar: "",
-          color: "#4f8ef7",
-        },
-      ],
-    }))
-  }
-
-  function removeManager(index: number) {
-    setForm((prev) => ({
-      ...prev,
-      managers: prev.managers.filter((_, managerIndex) => managerIndex !== index),
-    }))
-  }
+  const { color, label } = STATUS_CONFIG[project.status]
 
   return (
-    <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
+    <div style={{ minHeight: "100vh", background: "#0d1117", color: "#e5e7eb", padding: "28px 32px" }}>
+      <Link href="/dashboard/projects" style={{ color: "#4f8ef7", textDecoration: "none", fontSize: 14, fontWeight: 600, display: "inline-block", marginBottom: 20 }}>
+        ← กลับไปหน้าผลิตภัณฑ์
+      </Link>
+
+      <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
           <div>
-            <div style={S.modalTitle}>{isCreating ? "เพิ่มโปรเจคใหม่" : "แก้ไขโปรเจค"}</div>
-            {!isCreating && <div style={S.modalSub}>{project.name}</div>}
+            <h1 style={{ margin: 0, fontSize: 24, color: "#f9fafb" }}>{project.name}</h1>
+            <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 14 }}>{project.description}</p>
           </div>
-          <button onClick={onClose} style={S.closeBtn}>✕</button>
+          <span style={{ padding: "6px 10px", borderRadius: 999, border: `1px solid ${color}44`, background: `${color}22`, color, fontSize: 12, fontWeight: 700 }}>
+            {label}
+          </span>
         </div>
-        <div style={S.modalBody}>
-          <SLabel label="ข้อมูลหลัก" />
-          <Field label="ชื่อโปรเจค"><Input value={form.name} onChange={(v) => set("name", v)} /></Field>
-          <Field label="เว็บไซต์"><Input value={form.website} onChange={(v) => set("website", v)} placeholder="example.com" /></Field>
-          <Field label="คำอธิบาย"><textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} style={{ ...S.input, resize: "vertical" }} /></Field>
-          <SLabel label="สถานะและความคืบหน้า" />
-          <Field label="สถานะ">
-            <select value={form.status} onChange={(e) => set("status", e.target.value)} style={S.input}>
-              <option value="pending">รอดำเนินการ</option>
-              <option value="in_progress">กำลังดำเนินการ</option>
-              <option value="completed">เสร็จแล้ว</option>
-            </select>
-          </Field>
-          <Field label={`ความคืบหน้า (${form.progress}%)`}>
-            <input type="range" min={0} max={100} value={form.progress} onChange={(e) => set("progress", Number(e.target.value))} style={{ width: "100%", accentColor: "#4f8ef7" }} />
-          </Field>
-          <Field label="วันที่เริ่ม"><Input type="date" value={form.startDate} onChange={(v) => set("startDate", v)} /></Field>
-          <SLabel label="ผู้ดูแลโปรเจค" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {form.managers.map((manager, index) => (
-              <div key={`${manager.id}-${index}`} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  value={manager.name}
-                  onChange={(e) => updateManager(index, e.target.value)}
-                  placeholder="ชื่อผู้ดูแล"
-                  style={S.input}
-                />
-                <button onClick={() => removeManager(index)} style={S.removeBtn}>ลบ</button>
-              </div>
-            ))}
-            <button onClick={addManager} style={S.addManagerBtn}>+ เพิ่มผู้ดูแล</button>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+          <InfoCard label="เว็บไซต์" value={project.website} />
+          <InfoCard label="ความคืบหน้า" value={`${project.progress}%`} />
+          <InfoCard label="แพ็กเกจ" value={project.package} />
+          <InfoCard label="วันที่เริ่ม" value={new Date(project.startDate).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })} />
+        </div>
+
+        <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "16px 18px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              ความคืบหน้าโครงการ
+            </div>
+            <div style={{ fontSize: 14, color: "#f9fafb", fontWeight: 700 }}>{project.progress}%</div>
           </div>
-          <SLabel label="ข้อมูลเทคนิค" />
-          <Field label="แพ็กเกจ">
-            <select value={form.package} onChange={(e) => set("package", e.target.value)} style={S.input}>
-              {PACKAGES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </Field>
-          <Field label="Domain"><Input value={form.domain} onChange={(v) => set("domain", v)} /></Field>
-          <Field label="Token"><Input value={form.token} onChange={(v) => set("token", v)} /></Field>
+          <div style={{ height: 10, borderRadius: 999, background: "#1f2937", overflow: "hidden" }}>
+            <div style={{ width: `${project.progress}%`, height: "100%", borderRadius: 999, background: color, transition: "width 0.3s ease" }} />
+          </div>
+          <div style={{ marginTop: 8, fontSize: 13, color: "#9ca3af" }}>สถานะ: {label}</div>
         </div>
-        <div style={{ ...S.modalFooter, justifyContent: isCreating ? "flex-end" : "space-between" }}>
-          {!isCreating && <button onClick={() => { if (confirm("ลบโปรเจคนี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบโปรเจค</button>}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onClose} style={S.cancelBtn}>ยกเลิก</button>
-            <button onClick={() => onSave(form)} style={S.saveBtn}>บันทึก</button>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+          <InfoCard label="Domain" value={project.domain || "-"} />
+          <InfoCard label="Token" value={project.token || "-"} />
+          <InfoCard label="Owner ID" value={String(project.ownerId)} />
+          <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              ผู้จัดการและดูแล
+            </div>
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+              {project.managers.length > 0 ? (
+                project.managers.map((manager) => (
+                  <div key={manager.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${manager.color}22`, color: manager.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: `1px solid ${manager.color}44` }}>
+                      {manager.avatar}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, color: "#f9fafb", fontWeight: 600 }}>{manager.name}</div>
+                      <div style={{ fontSize: 12, color: "#9ca3af" }}>ผู้ดูแลโปรเจกต์</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: 13, color: "#9ca3af" }}>ยังไม่มีผู้จัดการที่กำกับดูแล</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -301,62 +85,11 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
   )
 }
 
-function SLabel({ label }: { label: string }) {
-  return <div style={{ fontSize: 11, fontWeight: 700, color: "#4f8ef7", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginTop: 4 }}>{label}</div>
-}
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{label}</label>{children}</div>
-}
-function Input({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
-  return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={S.input} />
-}
-
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() || "")
-    .join("")
-}
-
-const S: Record<string, React.CSSProperties> = {
-  page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
-  addBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
-  roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
-  filterRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" },
-  searchInput: { background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 14px", color: "#f9fafb", fontSize: 13, outline: "none", width: 220 },
-  tabGroup: { display: "flex", gap: 4, background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: 4 },
-  tabBtn: { border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 },
-  card: { background: "#111827", border: "1px solid #8b8b8b", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 },
-  cardName: { fontSize: 16, fontWeight: 700, color: "#f9fafb", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
-  cardWebsite: { fontSize: 12, color: "#4f8ef7", textDecoration: "none", marginTop: 2, display: "block" },
-  cardDesc: { fontSize: 13, color: "#6b7280", lineHeight: 1.6, margin: 0 },
-  badge: { fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" as const, flexShrink: 0 },
-  progressTrack: { background: "#1f2937", borderRadius: 999, height: 6, overflow: "hidden" },
-  progressFill: { height: "100%", borderRadius: 999, transition: "width 0.4s ease" },
-  metaRow: { display: "flex", gap: 16 },
-  metaItem: { display: "flex", flexDirection: "column", gap: 2 },
-  metaLabel: { fontSize: 11, color: "#4b5563", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em" },
-  metaValue: { fontSize: 13, color: "#d1d5db", fontWeight: 600 },
-  editBtn: { background: "#1f2937", border: "1px solid #374151", borderRadius: 7, color: "#9ca3af", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" },
-  addManagerBtn: { background: "#1f2937", border: "1px solid #374151", borderRadius: 8, color: "#4f8ef7", fontSize: 12, fontWeight: 600, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start" },
-  removeBtn: { background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#f87171", fontSize: 12, fontWeight: 600, padding: "8px 10px", cursor: "pointer" },
-  empty: { color: "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
-  modal: { background: "#111827", border: "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #1f2937" },
-  modalTitle: { fontSize: 17, fontWeight: 700, color: "#f9fafb" },
-  modalSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  closeBtn: { background: "transparent", border: "none", color: "#6b7280", fontSize: 16, cursor: "pointer" },
-  modalBody: { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 },
-  modalFooter: { display: "flex", alignItems: "center", padding: "16px 24px", borderTop: "1px solid #1f2937" },
-  input: { background: "#0d1117", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
-  saveBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 24px", cursor: "pointer" },
-  cancelBtn: { background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 20px", cursor: "pointer" },
-  deleteBtn: { background: "#1f1215", border: "1px solid #450a0a", borderRadius: 8, color: "#f87171", fontSize: 13, fontWeight: 600, padding: "9px 16px", cursor: "pointer" },
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ background: "#0d1117", border: "1px solid #1f2937", borderRadius: 12, padding: "12px 14px" }}>
+      <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+      <div style={{ fontSize: 14, color: "#f9fafb", marginTop: 6, wordBreak: "break-word" }}>{value}</div>
+    </div>
+  )
 }
