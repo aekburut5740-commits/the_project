@@ -51,6 +51,7 @@ export function normalizeProject(p: any) {
     status: p.status ?? "pending", 
     managers: p.managers ?? [],
     domain: p.domain ?? "",
+    website: p.website ?? p.domain ?? "",
     package: p.package ?? "",
     token: p.token ?? "",}
 }
