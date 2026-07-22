@@ -17,10 +17,14 @@ export async function register(username: string, email: string, password: string
 }
 
 // เข้าสู่ระบบ (ใช้ได้ทั้ง username และ email)
-export async function login(username: string, password: string) {
+export async function login(username: string, email: string, password: string) {
+  if (!username || !email) {
+    throw new Error("Username, Email หรือ Password ไม่ถูกต้อง")
+  }
+
   const result = await db.query(
-    "SELECT * FROM users WHERE username = $1 OR email = $1",
-    [username]
+    "SELECT * FROM users WHERE username = $1 AND email = $2",
+    [username, email]
   )
   
   if (!result.rows.length) {
