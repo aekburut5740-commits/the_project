@@ -42,14 +42,14 @@ new Elysia()
   })
 
   .post("/api/login", async ({ body }) => {
-    const { username, password } = body as any
-    try {
-      const result = await login(username, password)
-      return result
-    } catch (err: any) {
-      return { message: err.message }
-    }
-  })
+  const { username, email, password } = body as any
+  try {
+    const result = await login(username, email, password)
+    return result
+  } catch (err: any) {
+    return { message: err.message }
+  }
+})
 
   .get("/api/profile", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -617,6 +617,18 @@ new Elysia()
       set.status = 404
       return { message: err.message }
     }
+  })
+
+  // เสิร์ฟไฟล์จาก uploads folder
+  .get("/uploads/:filename", async ({ params, set }) => {
+    const filepath = `./uploads/${params.filename}`
+    const file = Bun.file(filepath)
+    const exists = await file.exists()
+    if (!exists) {
+      set.status = 404
+      return { message: "ไม่พบไฟล์" }
+    }
+    return new Response(file)
   })
   
   .listen(4000)

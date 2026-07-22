@@ -9,15 +9,22 @@ import { useNotifications } from "@/lib/notificationStore"
 import { getUser } from "@/lib/auth"
 import { backend, normalizeProject } from "@/lib/backend"
 
-function normalizeDocument(file: any): Document {
+type DocumentWithUrl = Document & { fileUrl?: string }
+
+function normalizeDocument(file: any): DocumentWithUrl {
   const name = file.filename ?? file.name ?? "untitled"
   const ext = name.split(".").pop()?.toLowerCase()
+  const filepath = file.filepath ?? ""
+  const filename = filepath.split("/").pop() ?? name
   return {
     id: Number(file.id), name, projectId: Number(file.project_id ?? file.projectId),
-    category: file.category ?? "other", size: file.filesize ? `${Math.max(1, Math.round(Number(file.filesize) / 1024))} KB` : "—",
-    uploadedBy: file.username ?? file.uploadedBy ?? "—", uploadedAt: file.created_at ?? file.uploadedAt ?? "",
+    category: file.category ?? "other",
+    size: file.filesize ? `${Math.max(1, Math.round(Number(file.filesize) / 1024))} KB` : "—",
+    uploadedBy: file.username ?? file.uploadedBy ?? "—",
+    uploadedAt: file.created_at ?? file.uploadedAt ?? "",
     isConfidential: Boolean(file.is_confidential ?? file.isConfidential ?? false),
     fileType: ext === "pdf" ? "pdf" : ["jpg", "jpeg", "png", "gif", "webp"].includes(ext || "") ? "image" : ["doc", "docx", "txt", "md"].includes(ext || "") ? "doc" : "other",
+    fileUrl: `http://localhost:4000/uploads/${filename}`
   }
 }
 
@@ -28,13 +35,13 @@ export default function DocumentVaultPage() {
   const myProjectIds = useMemo(() => projects.map((p) => p.id), [projects])
 
   const { addNotif } = useNotifications()
-  const [docs, setDocs] = useState<Document[]>([])
+  const [docs, setDocs] = useState<DocumentWithUrl[]>([])
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
   const [filterProject, setFilterProject] = useState<number | "all">("all")
   const [filterCategory, setFilterCategory] = useState<DocCategory | "all">("all")
   const [showUpload, setShowUpload] = useState(false)
-  const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<DocumentWithUrl | null>(null)
 
   const myProjects = projects
 
@@ -58,24 +65,24 @@ export default function DocumentVaultPage() {
     return matchSearch && matchProject && matchCategory
   })
 
-  // Group by project
-  const grouped = myProjects.reduce<Record<number, Document[]>>((acc, proj) => {
+  const grouped = myProjects.reduce<Record<number, DocumentWithUrl[]>>((acc, proj) => {
     const items = filtered.filter((d) => d.projectId === proj.id)
     if (items.length > 0) acc[proj.id] = items
     return acc
   }, {})
 
   async function handleUpload(newDoc: Omit<Document, "id">, file: File) {
-    try { const saved = normalizeDocument(await backend.uploadFile(newDoc.projectId, file))
-    setDocs((prev) => [...prev, saved])
-    const proj = projects.find((p) => p.id === newDoc.projectId)
-    addNotif({
-      type: "document",
-      title: "อัปโหลดเอกสารใหม่",
-      message: `Admin อัปโหลด ${newDoc.name} ใน ${proj?.name}`,
-      forUserId: proj?.ownerId ?? "all",
-    })
-    setShowUpload(false)
+    try {
+      const saved = normalizeDocument(await backend.uploadFile(newDoc.projectId, file))
+      setDocs((prev) => [...prev, saved])
+      const proj = projects.find((p) => p.id === newDoc.projectId)
+      addNotif({
+        type: "document",
+        title: "อัปโหลดเอกสารใหม่",
+        message: `Admin อัปโหลด ${newDoc.name} ใน ${proj?.name}`,
+        forUserId: proj?.ownerId ?? "all",
+      })
+      setShowUpload(false)
     } catch (err) { setError(err instanceof Error ? err.message : "อัปโหลดเอกสารไม่สำเร็จ") }
   }
 
@@ -94,7 +101,6 @@ export default function DocumentVaultPage() {
       </div>
       {error && <div style={{ color: "#f87171", marginBottom: 12 }}>{error}</div>}
 
-      {/* Role badge */}
       <div style={{ marginBottom: 20 }}>
         <span style={{
           ...S.roleBadge,
@@ -106,7 +112,6 @@ export default function DocumentVaultPage() {
         </span>
       </div>
 
-      {/* Category stats */}
       <div style={S.statsRow}>
         {(Object.keys(CATEGORY_CONFIG) as DocCategory[]).map((cat) => {
           const count = docs.filter((d) => d.category === cat).length
@@ -120,7 +125,6 @@ export default function DocumentVaultPage() {
         })}
       </div>
 
-      {/* Filters */}
       <div style={S.filterRow}>
         <div style={{ position: "relative", flex: 1, maxWidth: 260 }}>
           <Search size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#4b5563" }} />
@@ -133,7 +137,6 @@ export default function DocumentVaultPage() {
         </select>
       </div>
 
-      {/* Grouped docs */}
       {Object.keys(grouped).length === 0 ? (
         <div style={S.empty}>ไม่พบเอกสาร</div>
       ) : (
@@ -153,14 +156,15 @@ export default function DocumentVaultPage() {
                     onDelete={async () => {
                       if (confirm("ลบเอกสารนี้?")) {
                         const proj = projects.find((p) => p.id === doc.projectId)
-                        try { await backend.deleteFile(doc.id)
-                        setDocs((prev) => prev.filter((d) => d.id !== doc.id))
-                        addNotif({
-                          type: "document",
-                          title: "เอกสารถูกลบ",
-                          message: `Admin ลบ ${doc.name} ออกจาก ${proj?.name}`,
-                          forUserId: proj?.ownerId ?? "all",
-                        })
+                        try {
+                          await backend.deleteFile(doc.id)
+                          setDocs((prev) => prev.filter((d) => d.id !== doc.id))
+                          addNotif({
+                            type: "document",
+                            title: "เอกสารถูกลบ",
+                            message: `Admin ลบ ${doc.name} ออกจาก ${proj?.name}`,
+                            forUserId: proj?.ownerId ?? "all",
+                          })
                         } catch (err) { setError(err instanceof Error ? err.message : "ลบเอกสารไม่สำเร็จ") }
                       }
                     }} />
@@ -182,14 +186,18 @@ export default function DocumentVaultPage() {
 }
 
 function DocCard({ doc, isAdmin, onPreview, onDelete }: {
-  doc: Document; isAdmin: boolean; onPreview: () => void; onDelete: () => void
+  doc: DocumentWithUrl; isAdmin: boolean; onPreview: () => void; onDelete: () => void
 }) {
   const { label, color } = CATEGORY_CONFIG[doc.category]
   const FileIcon = doc.fileType === "image" ? FileImage : doc.fileType === "pdf" ? FileText : File
   return (
     <div style={S.docCard}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <div style={{ ...S.fileIcon, background: color + "22", color }}><FileIcon size={20} /></div>
+        {doc.fileType === "image" && doc.fileUrl ? (
+          <img src={doc.fileUrl} style={{ width: 40, height: 40, borderRadius: 10, objectFit: "cover" }} />
+        ) : (
+          <div style={{ ...S.fileIcon, background: color + "22", color }}><FileIcon size={20} /></div>
+        )}
         {doc.isConfidential && (
           <div style={S.confBadge}><Lock size={9} /><span>ลับ</span></div>
         )}
@@ -205,7 +213,7 @@ function DocCard({ doc, isAdmin, onPreview, onDelete }: {
       </div>
       <div style={S.docActions}>
         <button onClick={onPreview} style={S.actionBtn} title="ดูรายละเอียด"><Eye size={12} /></button>
-        <button style={S.actionBtn} title="ดาวน์โหลด"><Download size={12} /></button>
+        <a href={doc.fileUrl} download={doc.name} style={{ ...S.actionBtn, textDecoration: "none" }} title="ดาวน์โหลด"><Download size={12} /></a>
         {isAdmin && (
           <button onClick={onDelete} style={{ ...S.actionBtn, color: "#f87171" }} title="ลบ"><Trash2 size={12} /></button>
         )}
@@ -285,7 +293,7 @@ function UploadModal({ projectIds, onClose, onUpload }: {
   )
 }
 
-function PreviewModal({ doc, onClose }: { doc: Document; onClose: () => void }) {
+function PreviewModal({ doc, onClose }: { doc: DocumentWithUrl; onClose: () => void }) {
   const { label, color } = CATEGORY_CONFIG[doc.category]
   const project = MOCK_PROJECTS.find((p) => p.id === doc.projectId)
   const FileIcon = doc.fileType === "image" ? FileImage : doc.fileType === "pdf" ? FileText : File
@@ -298,7 +306,11 @@ function PreviewModal({ doc, onClose }: { doc: Document; onClose: () => void }) 
         </div>
         <div style={{ ...S.modalBody, gap: 0 }}>
           <div style={{ display: "flex", justifyContent: "center", padding: "20px 0" }}>
-            <div style={{ ...S.fileIcon, width: 56, height: 56, borderRadius: 14, background: color + "22", color }}><FileIcon size={28} /></div>
+            {doc.fileType === "image" && doc.fileUrl ? (
+              <img src={doc.fileUrl} style={{ width: 120, height: 120, borderRadius: 14, objectFit: "cover" }} />
+            ) : (
+              <div style={{ ...S.fileIcon, width: 56, height: 56, borderRadius: 14, background: color + "22", color }}><FileIcon size={28} /></div>
+            )}
           </div>
           {[
             ["ชื่อไฟล์", doc.name],
@@ -316,7 +328,9 @@ function PreviewModal({ doc, onClose }: { doc: Document; onClose: () => void }) 
           ))}
         </div>
         <div style={{ ...S.modalFooter, justifyContent: "flex-end" }}>
-          <button style={S.saveBtn}><Download size={13} style={{ marginRight: 6 }} />ดาวน์โหลด</button>
+          <a href={doc.fileUrl} download={doc.name} style={{ ...S.saveBtn, textDecoration: "none" }}>
+            <Download size={13} style={{ marginRight: 6 }} />ดาวน์โหลด
+          </a>
         </div>
       </div>
     </div>
