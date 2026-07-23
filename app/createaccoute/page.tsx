@@ -1,7 +1,9 @@
-"use client";
+"use client"
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { backend } from "@/lib/backend"
 
 export default function CreateAccountPage() {
 	const router = useRouter();
@@ -10,39 +12,53 @@ export default function CreateAccountPage() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
-	const [error, setError] = useState<string | null>(null);
+	const [error, setError] = useState("")
 	const [loading, setLoading] = useState(false);
 
-	const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
-		e.preventDefault();
-		setError(null);
-		if (password !== confirmPassword) {
-			setError("รหัสผ่านกับยืนยันรหัสผ่านไม่ตรงกัน");
-			return;
-		}
-		if (!username || !email || !password) {
-			setError("กรุณากรอกข้อมูลให้ครบทุกช่อง");
-			return;
+	const handleSubmit = async (
+		e: React.FormEvent<HTMLFormElement>
+	) => {
+		e.preventDefault()
+		setError("")
+
+		const cleanUsername = username.trim()
+		const cleanEmail = email.trim()
+
+		if (!cleanUsername || !cleanEmail || !password || !confirmPassword) {
+			setError("กรุณากรอกข้อมูลให้ครบทุกช่อง")
+			return
 		}
 
-		setLoading(true);
-		try {
-			const res = await fetch("http://localhost:4000/api/register", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
-				body: JSON.stringify({ username, email, password })
-			});
-			const data = await res.json();
-			if (!res.ok || !data.user) throw new Error(data.message || "ไม่สามารถสร้างบัญชีได้");
-			router.push("/login");
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "ไม่สามารถสร้างบัญชีได้");
-		} finally {
-			setLoading(false);
+		if (password.length < 6) {
+			setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")
+			return
 		}
-	};
+
+		if (password !== confirmPassword) {
+			setError("รหัสผ่านกับยืนยันรหัสผ่านไม่ตรงกัน")
+			return
+		}
+
+		try {
+			setLoading(true)
+
+			await backend.register({
+				username: cleanUsername,
+				email: cleanEmail,
+				password,
+			})
+
+			router.replace("/login?registered=success")
+		} catch (err: unknown) {
+			setError(
+				err instanceof Error
+					? err.message
+					: "ไม่สามารถสร้างบัญชีได้"
+			)
+		} finally {
+			setLoading(false)
+		}
+	}
 
 	return (
 		<div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -53,7 +69,7 @@ export default function CreateAccountPage() {
 						<p className="text-sm text-gray-500">สร้างบัญชีใหม่เพื่อเข้าใช้งาน</p>
 					</div>
 
-					<div className="space-y-5">
+					<form onSubmit={handleSubmit} className="space-y-5">
 						<div>
 							<label className="block text-sm font-medium text-gray-600 mb-1.5">Username</label>
 							<div className="relative">
@@ -61,8 +77,13 @@ export default function CreateAccountPage() {
 								<input
 									type="text"
 									value={username}
-									onChange={(e) => setUsername(e.target.value)}
+									onChange={(e) => {
+										setUsername(e.target.value)
+										if (error) setError("")
+									}}
 									placeholder="username"
+									required
+									autoComplete="username"
 									className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
 								/>
 							</div>
@@ -75,8 +96,13 @@ export default function CreateAccountPage() {
 								<input
 									type="email"
 									value={email}
-									onChange={(e) => setEmail(e.target.value)}
+									onChange={(e) => {
+										setEmail(e.target.value)
+										if (error) setError("")
+									}}
 									placeholder="yourname@email.com"
+									required
+									autoComplete="email"
 									className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
 								/>
 							</div>
@@ -89,8 +115,14 @@ export default function CreateAccountPage() {
 								<input
 									type={showPassword ? "text" : "password"}
 									value={password}
-									onChange={(e) => setPassword(e.target.value)}
+									onChange={(e) => {
+										setPassword(e.target.value)
+										if (error) setError("")
+									}}
 									placeholder="••••••••"
+									required
+									minLength={6}
+									autoComplete="new-password"
 									className="w-full h-10 pl-9 pr-10 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
 								/>
 								<button
@@ -110,23 +142,44 @@ export default function CreateAccountPage() {
 								<input
 									type={showPassword ? "text" : "password"}
 									value={confirmPassword}
-									onChange={(e) => setConfirmPassword(e.target.value)}
+									onChange={(e) => {
+										setConfirmPassword(e.target.value)
+										if (error) setError("")
+									}}
 									placeholder="••••••••"
+									required
+									minLength={6}
+									autoComplete="new-password"
 									className="w-full h-10 pl-3 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
 								/>
 							</div>
 						</div>
 
+						{error && (
+							<div
+								role="alert"
+								className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600"
+							>
+								{error}
+							</div>
+						)}
+
 						<button
-							onClick={handleSubmit}
-							className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm font-medium transition-all"
+							type="submit"
+							disabled={loading}
+							className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 disabled:cursor-not-allowed active:scale-95 text-white text-sm font-medium transition-all"
 						>
-							Create account
+							{loading ? "กำลังสร้างบัญชี..." : "Create account"}
 						</button>
 						<div className="mt-4 text-center">
-							<a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">มีบัญชีแล้ว? เข้าสู่ระบบ</a>
+							<Link
+								href="/login"
+								className="text-sm font-medium text-indigo-600 hover:underline"
+							>
+								มีบัญชีแล้ว? เข้าสู่ระบบ
+							</Link>
 						</div>
-					</div>
+					</form>
 				</div>
 			</div>
 		</div>

@@ -1,13 +1,67 @@
 import { apiFetch } from "./api"
 import type { JwtUser } from "./auth"
+import type {
+  Project,
+  Manager,
+  CreateProjectInput,
+  UpdateProjectInput,
+} from "@/types/project"
+
 
 export const backend = {
   profile: () => apiFetch<{ user: JwtUser }>("/api/profile"),
-  projects: (admin = false) => apiFetch<any[]>(admin ? "/api/admin/projects" : "/api/projects"),
-  createProject: (body: any) => apiFetch("/api/projects", { method: "POST", body: JSON.stringify(body) }),
-  updateProject: (id: number, body: any, admin = false) => apiFetch(admin ? `/api/admin/projects/${id}` : `/api/projects/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  updateProgress: (id: number, progress: number) => apiFetch(`/api/admin/projects/${id}/progress`, { method: "PUT", body: JSON.stringify({ progress }) }),
-  deleteProject: (id: number) => apiFetch(`/api/admin/projects/${id}`, { method: "DELETE" }),
+  projects: (admin = false) =>
+  apiFetch<unknown[]>(
+    admin
+      ? "/api/admin/projects"
+      : "/api/projects"
+  ),
+
+createProject: (body: CreateProjectInput) =>
+  apiFetch<unknown>("/api/projects", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+updateProject: (
+  id: number,
+  body: UpdateProjectInput,
+  admin = false
+) =>
+  apiFetch<unknown>(
+    admin
+      ? `/api/admin/projects/${id}`
+      : `/api/projects/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }
+  ),
+
+updateProgress: (
+  id: number,
+  progress: number
+) =>
+  apiFetch<unknown>(
+    `/api/admin/projects/${id}/progress`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ progress }),
+    }
+  ),
+
+deleteProject: (id: number) =>
+  apiFetch<{ message?: string }>(
+    `/api/admin/projects/${id}`,
+    {
+      method: "DELETE",
+    }
+  ),
+
+projectMembers: (projectId: number) =>
+  apiFetch<unknown[]>(
+    `/api/projects/${projectId}/members`
+  ),
   dashboard: (admin = false) => apiFetch(admin ? "/api/admin/dashboard" : "/api/dashboard"),
   projectHealth: (id: number) => apiFetch<any>(`/api/projects/${id}/health`),
   milestones: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/milestones`),
@@ -29,7 +83,6 @@ export const backend = {
   setMaintenance: (is_active: boolean, message = "") => apiFetch("/api/admin/maintenance", { method: "PATCH", body: JSON.stringify({ is_active, message }) }),
   updateProfile: (username: string, email: string) => apiFetch("/api/profile", { method: "PUT", body: JSON.stringify({ username, email }) }),
   changePassword: (old_password: string, new_password: string) => apiFetch("/api/profile/password", { method: "PUT", body: JSON.stringify({ old_password, new_password }) }),
-  projectMembers: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/members`),
   addProjectMember: (projectId: number, name: string, role = "ผู้ดูแลโปรเจค") => apiFetch(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ name, role }) }),
   removeProjectMember: (id: number) => apiFetch(`/api/members/${id}`, { method: "DELETE" }),
   notifications: () => apiFetch<any[]>("/api/notifications"),
@@ -40,21 +93,117 @@ export const backend = {
   deleteComment: (id: number) => apiFetch(`/api/comments/${id}`, { method: "DELETE" }),
   projectLogs: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/logs`),
   gitPulse: () => apiFetch<any>("/api/gitpulse"),
+  register: (body: {username: string, email: string, password: string}) =>apiFetch("/api/register", {method: "POST",body: JSON.stringify(body)}),
+  login: (body: {
+  username: string
+  email: string
+  password: string
+}) =>
+  apiFetch<{
+    message: string
+    token: string
+  }>("/api/login", {
+    method: "POST",
+    body: JSON.stringify(body)
+  }),
 }
 
-export function normalizeProject(p: any) {
-  return {    ...p, 
-    id: Number(p.id), 
-    ownerId: Number(p.ownerId ?? p.user_id ?? p.userId ?? 0), 
-    startDate: p.startDate ?? p.start_date ?? "", 
-    progress: Number(p.progress ?? 0), 
-    status: p.status ?? "pending", 
-    managers: p.managers ?? [],
-    domain: p.domain ?? "",
-    website: p.website ?? p.domain ?? "",
-    package: p.package ?? "",
-    token: p.token ?? "",}
+
+
+export function normalizeProject(project: any): Project {
+  const domain = String(
+    project.domain ??
+    project.website ??
+    ""
+  )
+
+  return {
+    id: Number(project.id),
+
+    name: String(project.name ?? ""),
+    description: String(project.description ?? ""),
+
+    status:
+      project.status === "in_progress" ||
+      project.status === "completed"
+        ? project.status
+        : "pending",
+
+    progress: Math.min(
+      100,
+      Math.max(0, Number(project.progress ?? 0))
+    ),
+
+    ownerId: Number(
+      project.ownerId ??
+      project.user_id ??
+      project.userId ??
+      0
+    ),
+
+    ownerName:
+      project.ownerName ??
+      project.username ??
+      undefined,
+
+    domain,
+    website: domain,
+
+    startDate: String(
+      project.startDate ??
+      project.start_date ??
+      ""
+    ),
+
+    package: String(project.package ?? ""),
+    token: String(project.token ?? ""),
+
+    managers: Array.isArray(project.managers)
+      ? project.managers.map(normalizeManager)
+      : [],
+
+    createdAt:
+      project.createdAt ??
+      project.created_at ??
+      undefined,
+
+    updatedAt:
+      project.updatedAt ??
+      project.updated_at ??
+      undefined,
+  }
 }
 export function normalizeMilestone(m: any) {
   return { ...m, id: Number(m.id), projectId: Number(m.projectId ?? m.project_id), dueDate: m.dueDate ?? m.end_date ?? "", startDate: m.startDate ?? m.start_date ?? "", progress: Number(m.progress ?? 0), status: m.status ?? "upcoming", tasks: m.tasks ?? [] }
+}
+
+export function normalizeManager(manager: any): Manager {
+  const name = String(manager.name ?? "")
+
+  return {
+    id: Number(manager.id),
+    projectId: manager.project_id
+      ? Number(manager.project_id)
+      : undefined,
+
+    name,
+    role: String(manager.role ?? "ผู้ดูแลโปรเจค"),
+
+    avatar:
+      String(manager.avatar ?? "") ||
+      getInitials(name),
+
+    color: String(manager.color ?? "#4f8ef7"),
+  }
+}
+
+function getInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0))
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
 }

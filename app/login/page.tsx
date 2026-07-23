@@ -1,36 +1,88 @@
-"use client";
+"use client"
 
-import React, { useState } from "react";
-import { apiFetch } from "@/lib/api";
-import { setToken } from "@/lib/auth";
+import React, { useState } from "react"
+import { useRouter } from "next/navigation"
+import { apiFetch } from "@/lib/api"
+import { removeToken, setToken } from "@/lib/auth"
+
+interface LoginResponse {
+  message: string
+  token?: string
+  user?: {
+    id: number
+    username: string
+    email: string
+    role: "admin" | "customer"
+  }
+}
 
 export default function LoginPage() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
+  const router = useRouter()
 
- const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
-  e.preventDefault()
-  try {
-    const data = await apiFetch('/api/login', {
-      method: "POST",
-      body: JSON.stringify({ username, email, password })
-    });
-    if (data.token) {
-      setToken(data.token)
-      window.location.href = '/dashboard'
+  const [showPassword, setShowPassword] = useState(false)
+  const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [remember, setRemember] = useState(false)
+
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault()
+
+    setError("")
+
+    const cleanUsername = username.trim()
+    const cleanEmail = email.trim()
+
+    if (!cleanUsername || !cleanEmail || !password) {
+      setError("กรุณากรอก Username, Email และ Password ให้ครบ")
+      return
     }
-  } catch (error) {
-    console.error("Error occurred while logging in:", error);
+
+    try {
+      setLoading(true)
+
+      // ลบ Token เก่าก่อน เพื่อไม่ให้นำ Token ที่หมดอายุไปใช้ต่อ
+      removeToken()
+
+      const data = await apiFetch<LoginResponse>("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: cleanUsername,
+          email: cleanEmail,
+          password,
+        }),
+      })
+
+      if (!data.token) {
+        throw new Error(
+          data.message || "Username, Email หรือ Password ไม่ถูกต้อง"
+        )
+      }
+
+      setToken(data.token)
+      router.replace("/dashboard")
+    } catch (err: unknown) {
+      removeToken()
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่"
+      )
+    } finally {
+      setLoading(false)
+    }
   }
-};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-2xl flex rounded-2xl overflow-hidden shadow-lg border border-gray-200">
-        
+
 
         {/* Right Panel — Form */}
         <div className="flex-1 bg-white px-8 py-10 flex flex-col justify-center">
@@ -41,7 +93,7 @@ export default function LoginPage() {
             <p className="text-sm text-gray-500">เข้าสู่ระบบเพื่อดำเนินการต่อ</p>
           </div>
 
-          <div className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Username */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1.5">
@@ -51,14 +103,14 @@ export default function LoginPage() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                   <UserIcon />
                 </span>
-               <input
-                 type="text"
-                 name="username"
-                 value={username}
-                 onChange={(e) => setUsername(e.target.value)}
-                 placeholder="username"
-                 autoComplete="username"
-                 className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+                <input
+                  type="text"
+                  name="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="username"
+                  autoComplete="username"
+                  className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
                 />
               </div>
             </div>
@@ -112,31 +164,40 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember & Forgot */}
+            {/* Remember me */}
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="accent-indigo-500 w-4 h-4"
                 />
-                Remember me
+                <span>Remember me</span>
               </label>
-            
             </div>
 
-            {/* Submit */}
+            {/* แสดง Error แค่ครั้งเดียว */}
+            {error && (
+              <div
+                role="alert"
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600"
+              >
+                {error}
+              </div>
+            )}
+
+            {/* ปุ่ม Login */}
             <button
-              onClick={handleSubmit}
-              className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-sm font-medium transition-all"
+              type="submit"
+              disabled={loading}
+              className="w-full h-10 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 disabled:cursor-not-allowed active:scale-95 text-white text-sm font-medium transition-all"
             >
-              Login
+              {loading ? "กำลังเข้าสู่ระบบ..." : "Login"}
             </button>
             <div className="mt-4 text-center">
               <a href="/createaccoute" className="text-sm font-medium text-indigo-600 hover:underline">ยังไม่มีบัญชี? สร้างบัญชีใหม่</a>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     </div>

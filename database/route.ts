@@ -5,53 +5,106 @@ import jwt from "jsonwebtoken"
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
 
 // สมัครสมาชิก
-export async function register(username: string, email: string, password: string, role: string = "user") {
-  const hashed = await bcrypt.hash(password, 10)
-  
-  const result = await db.query(
-    "INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role",
-    [username, email, hashed, role]
+export async function register(
+  username: string,
+  email: string,
+  password: string
+) {
+  const cleanUsername = username?.trim()
+  const cleanEmail = email?.trim().toLowerCase()
+
+  if (!cleanUsername || !cleanEmail || !password) {
+    throw new Error("กรุณากรอกข้อมูลให้ครบทุกช่อง")
+  }
+
+  if (password.length < 6) {
+    throw new Error("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")
+  }
+
+  const existingUser = await db.query(
+    `SELECT id
+     FROM users
+     WHERE LOWER(username) = LOWER($1)
+        OR LOWER(email) = LOWER($2)
+     LIMIT 1`,
+    [cleanUsername, cleanEmail]
   )
-  
+
+  if (existingUser.rows.length > 0) {
+    throw new Error("Username หรือ Email นี้ถูกใช้งานแล้ว")
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10)
+
+  const result = await db.query(
+    `INSERT INTO users (username, email, password, role)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, username, email, role`,
+    [cleanUsername, cleanEmail, hashedPassword, "customer"]
+  )
+
   return result.rows[0]
 }
 
 // เข้าสู่ระบบ (ใช้ได้ทั้ง username และ email)
-export async function login(username: string, email: string, password: string) {
-  if (!username || !email) {
+export async function login(
+  username: string,
+  email: string,
+  password: string
+) {
+  if (!username || !email || !password) {
     throw new Error("Username, Email หรือ Password ไม่ถูกต้อง")
   }
 
   const result = await db.query(
-    "SELECT * FROM users WHERE username = $1 AND email = $2",
+    `SELECT id, username, email, password, role
+     FROM users
+     WHERE username = $1 AND email = $2`,
     [username, email]
   )
-  
+
   if (!result.rows.length) {
     throw new Error("Username, Email หรือ Password ไม่ถูกต้อง")
   }
-  
+
   const user = result.rows[0]
   const isMatch = await bcrypt.compare(password, user.password)
-  
+
   if (!isMatch) {
     throw new Error("Username, Email หรือ Password ไม่ถูกต้อง")
   }
-  
+
   const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
+    {
+      id: user.id,
+      username: user.username,
+      role: user.role
+    },
     JWT_SECRET,
     { expiresIn: "1d" }
   )
-  
-  return { message: "เข้าสู่ระบบสำเร็จ", token }
+
+  return {
+    message: "เข้าสู่ระบบสำเร็จ",
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role
+    }
+  }
 }
 
 export async function getProjects(user_id: number) {
   const result = await db.query(
-    "SELECT * FROM projects WHERE user_id = $1",
+    `SELECT *
+     FROM projects
+     WHERE user_id = $1
+     ORDER BY created_at DESC`,
     [user_id]
   )
+
   return result.rows
 }
 
@@ -197,10 +250,10 @@ export async function getDashboardSummary(user_id: number) {
   return {
     total: projects.length,
     summary: {
-      on_track:         projects.filter(p => p.status === 'on_track').length,
-      in_review:        projects.filter(p => p.status === 'in_review').length,
-      completed:        projects.filter(p => p.status === 'completed').length,
-      delayed:          projects.filter(p => p.status === 'delayed').length,
+      on_track: projects.filter(p => p.status === 'on_track').length,
+      in_review: projects.filter(p => p.status === 'in_review').length,
+      completed: projects.filter(p => p.status === 'completed').length,
+      delayed: projects.filter(p => p.status === 'delayed').length,
     },
     projects
   }
@@ -256,13 +309,13 @@ export async function getAdminDashboard() {
   const projects = projectsResult.rows
 
   return {
-    total_users:    Number(usersResult.rows[0].count),
+    total_users: Number(usersResult.rows[0].count),
     total_projects: projects.length,
     summary: {
-      on_track:  projects.filter(p => p.status === 'on_track').length,
+      on_track: projects.filter(p => p.status === 'on_track').length,
       in_review: projects.filter(p => p.status === 'in_review').length,
       completed: projects.filter(p => p.status === 'completed').length,
-      delayed:   projects.filter(p => p.status === 'delayed').length,
+      delayed: projects.filter(p => p.status === 'delayed').length,
     },
     projects
   }
@@ -474,8 +527,7 @@ export async function createMilestone(
   start_date: string,
   end_date: string,
   phase: string
-)
- {
+) {
   const result = await db.query(
     `INSERT INTO milestones (project_id, title, description, start_date, end_date, phase) 
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
@@ -483,7 +535,7 @@ export async function createMilestone(
   )
   return result.rows[0]
 }
- 
+
 
 // Admin: อัปเดต milestone
 export async function updateMilestone(
@@ -761,11 +813,11 @@ export async function changePassword(user_id: number, old_password: string, new_
     [user_id]
   )
   if (!result.rows.length) throw new Error("ไม่พบผู้ใช้งาน")
-  
+
   const user = result.rows[0]
   const isMatch = await bcrypt.compare(old_password, user.password)
   if (!isMatch) throw new Error("รหัสผ่านเดิมไม่ถูกต้อง")
-  
+
   const hashed = await bcrypt.hash(new_password, 10)
   await db.query(
     `UPDATE users SET password = $1 WHERE id = $2`,

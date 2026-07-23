@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { STATUS_CONFIG } from "@/lib/project-config"
+
+import type {
+  Project,
+  ProjectStatus,
+  Manager,
+} from "@/types/project"
 import {
-  STATUS_CONFIG, type Project, type ProjectStatus, type Manager,
-} from "@/lib/mockData"
-import { backend, normalizeProject } from "@/lib/backend"
+  backend,
+  normalizeManager,
+  normalizeProject,
+} from "@/lib/backend"
 import { getUser } from "@/lib/auth"
 import { useNotifications } from "@/lib/notificationStore"
 
@@ -20,16 +28,42 @@ export default function ProjectsPage() {
   const [error, setError] = useState("")
 
   async function loadProjects() {
+    setLoading(true)
+    setError("")
+
     try {
       const rows = await backend.projects(isAdmin)
-      const nextProjects = await Promise.all(rows.map(async (row) => {
-        const project = normalizeProject(row) as Project
-        const members = await backend.projectMembers(project.id).catch(() => [])
-        return { ...project, managers: members.map(normalizeManager) }
-      }))
+
+      const nextProjects = await Promise.all(
+        rows.map(async (row) => {
+          const project = normalizeProject(row)
+
+          try {
+            const memberRows =
+              await backend.projectMembers(project.id)
+
+            return {
+              ...project,
+              managers: memberRows.map(normalizeManager),
+            }
+          } catch {
+            return {
+              ...project,
+              managers: [],
+            }
+          }
+        })
+      )
+
       setProjects(nextProjects)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "ไม่สามารถโหลดโปรเจคได้")
+    } catch (err: unknown) {
+      setProjects([])
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "ไม่สามารถโหลดโปรเจคได้"
+      )
     } finally {
       setLoading(false)
     }
@@ -145,11 +179,28 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {filtered.length === 0 ? <div style={S.empty}>ไม่พบโปรเจค</div> : (
+      {loading ? (
+        <div style={S.empty}>
+          กำลังโหลดโปรเจค...
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={S.empty}>
+          {search || filterStatus !== "all"
+            ? "ไม่พบโปรเจคที่ตรงกับการค้นหา"
+            : "ยังไม่มีโปรเจค"}
+        </div>
+      ) : (
         <div style={S.grid}>
           {filtered.map((project) => (
-            <ProjectCard key={project.id} project={project} isAdmin={isAdmin}
-              onEdit={() => { setIsCreating(false); setEditingProject(project) }} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              isAdmin={isAdmin}
+              onEdit={() => {
+                setIsCreating(false)
+                setEditingProject(project)
+              }}
+            />
           ))}
         </div>
       )}
@@ -177,15 +228,21 @@ function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmi
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={S.cardName}>{p.name}</div>
-          <a
-            href={`https://${p.website}`}
-            target="_blank"
-            rel="noreferrer"
-            style={S.cardWebsite}
-            onClick={(e) => e.stopPropagation()}
-          >
-            🌐 {p.website}
-          </a>
+          {p.website ? (
+            <a
+              href={normalizeWebsiteUrl(p.website)}
+              target="_blank"
+              rel="noreferrer"
+              style={S.cardWebsite}
+              onClick={(event) => event.stopPropagation()}
+            >
+              🌐 {p.website}
+            </a>
+          ) : (
+            <span style={S.cardWebsite}>
+              🌐 ยังไม่ได้ระบุเว็บไซต์
+            </span>
+          )}
         </div>
         <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>{label}</span>
       </div>
@@ -195,12 +252,14 @@ function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmi
           <span style={{ color: "#6b7280" }}>ความคืบหน้า</span>
           <span style={{ color: "#f9fafb", fontWeight: 700, fontFamily: "monospace" }}>{p.progress}%</span>
         </div>
-        <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${p.progress}%`, background: color }} /></div>
+        <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${Math.min(100, Math.max(0, p.progress))}%`, background: color }} /></div>
       </div>
       <div style={S.metaRow}>
         <div style={S.metaItem}>
           <span style={S.metaLabel}>เริ่มต้น</span>
-          <span style={S.metaValue}>{new Date(p.startDate).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}</span>
+          <span style={S.metaValue}>
+            {formatProjectDate(p.startDate)}
+          </span>
         </div>
         <div style={S.metaItem}>
           <span style={S.metaLabel}>แพ็กเกจ</span>
@@ -351,12 +410,6 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
   return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={S.input} />
 }
 
-function normalizeManager(member: any, index: number): Manager {
-  const name = member.name ?? member.username ?? "ผู้ดูแล"
-  const colors = ["#4f8ef7", "#a78bfa", "#34d399", "#f59e0b"]
-  return { id: Number(member.id), name, avatar: getInitials(name), color: colors[index % colors.length] }
-}
-
 async function addNewManagers(projectId: number, managers: Manager[]) {
   const created = await Promise.all(managers.filter((manager) => manager.name.trim()).map((manager) => backend.addProjectMember(projectId, manager.name)))
   return created.map(normalizeManager)
@@ -376,6 +429,41 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() || "")
     .join("")
+}
+
+function formatProjectDate(value: string): string {
+  if (!value) {
+    return "ยังไม่กำหนด"
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return "ยังไม่กำหนด"
+  }
+
+  return date.toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+function normalizeWebsiteUrl(value: string): string {
+  const website = value.trim()
+
+  if (!website) {
+    return ""
+  }
+
+  if (
+    website.startsWith("http://") ||
+    website.startsWith("https://")
+  ) {
+    return website
+  }
+
+  return `https://${website}`
 }
 
 const S: Record<string, React.CSSProperties> = {
