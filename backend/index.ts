@@ -1,5 +1,5 @@
 
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks,updateProfile, changePassword,getProjectMembers, addProjectMember, removeProjectMember } from "../database/route"
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport ,checkMilestoneDue,getMaintenanceStatus, setMaintenanceMode,clickNotification,saveWebhook, getWebhooks,updateProfile, changePassword,getProjectMembers, addProjectMember, removeProjectMember } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -31,12 +31,13 @@ new Elysia()
   .use(cors())
   .get("/", () => "Server is running!")
 
-  .post("/api/register", async ({ body }) => {
+  .post("/api/register", async ({ body, set }) => {
     const { username, email, password, role } = body as any
     try {
       const user = await register(username, email, password, role)
       return { message: "สมัครสมาชิกสำเร็จ", user }
     } catch (err: any) {
+      set.status = 400
       return { message: err.message }
     }
   })
@@ -91,8 +92,17 @@ new Elysia()
       set.status = 403
       return { message: "ไม่มีสิทธิ์เข้าถึง" }
     }
-    const { status, url } = body as any
-    const updated = await updateProjectStatus(Number(params.id), status)
+    const { status, url, name, description, domain, start_date, package: package_name, token } = body as any
+    const updated = await updateAdminProject(
+      Number(params.id),
+      name,
+      description,
+      status,
+      domain,
+      start_date,
+      package_name,
+      token
+    )
     // สร้าง notification อัตโนมัติ พร้อมแนบ URL
     await createNotification(
       updated.user_id,

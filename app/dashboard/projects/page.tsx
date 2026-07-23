@@ -19,23 +19,24 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const rows = await backend.projects(isAdmin)
-        const nextProjects = await Promise.all(rows.map(async (row) => {
-          const project = normalizeProject(row) as Project
-          const members = await backend.projectMembers(project.id).catch(() => [])
-          return { ...project, managers: members.map(normalizeManager) }
-        }))
-        setProjects(nextProjects)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดโปรเจคได้")
-      } finally {
-        setLoading(false)
-      }
+  async function loadProjects() {
+    try {
+      const rows = await backend.projects(isAdmin)
+      const nextProjects = await Promise.all(rows.map(async (row) => {
+        const project = normalizeProject(row) as Project
+        const members = await backend.projectMembers(project.id).catch(() => [])
+        return { ...project, managers: members.map(normalizeManager) }
+      }))
+      setProjects(nextProjects)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ไม่สามารถโหลดโปรเจคได้")
+    } finally {
+      setLoading(false)
     }
-    load()
+  }
+
+  useEffect(() => {
+    loadProjects()
   }, [isAdmin])
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | "all">("all")
@@ -64,7 +65,11 @@ export default function ProjectsPage() {
       } else {
         const old = projects.find((project) => project.id === updated.id)
         if (isAdmin) {
-          await backend.updateProject(updated.id, { status: updated.status }, true)
+          await backend.updateProject(updated.id, {
+            name: updated.name, description: updated.description, status: updated.status,
+            domain: updated.domain || updated.website, start_date: updated.startDate,
+            package: updated.package, token: updated.token,
+          }, true)
           await backend.updateProgress(updated.id, updated.progress)
           await syncManagers(updated.id, old?.managers || [], updated.managers)
         } else {
@@ -74,7 +79,7 @@ export default function ProjectsPage() {
             package: updated.package, token: updated.token,
           })
         }
-        setProjects((prev) => prev.map((project) => project.id === updated.id ? updated : project))
+        await loadProjects()
         addNotif({ type: "project", title: "โปรเจคของคุณถูกอัปเดต", message: `Admin แก้ไขโปรเจค "${updated.name}"${old?.status !== updated.status ? ` → สถานะเปลี่ยนเป็น "${STATUS_CONFIG[updated.status].label}"` : ""}`, forUserId: updated.ownerId })
       }
       setEditingProject(null)

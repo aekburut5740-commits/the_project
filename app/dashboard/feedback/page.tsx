@@ -1,32 +1,58 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { MessageSquare, Plus, Send } from "lucide-react"
 import {
-  MOCK_CURRENT_USER, MOCK_PROJECTS, MOCK_FEEDBACKS,
   FEEDBACK_STATUS_CONFIG, FEEDBACK_PRIORITY_CONFIG,
   type Feedback, type FeedbackStatus, type FeedbackPriority, type FeedbackComment,
+  type Project,
 } from "@/lib/mockData"
 import { useNotifications } from "@/lib/notificationStore"
+import { backend, normalizeProject } from "@/lib/backend"
+import { getUser } from "@/lib/auth"
 
 export default function FeedbackPage() {
-  const user = MOCK_CURRENT_USER
+  const user = getUser() || { id: 0, username: "", role: "customer" as const }
   const isAdmin = user.role === "admin"
   const { addNotif } = useNotifications()
-
-  const baseFeedbacks = useMemo(() =>
-    isAdmin ? MOCK_FEEDBACKS : MOCK_FEEDBACKS.filter((f) => f.authorId === user.id),
-    [isAdmin, user.id]
-  )
-
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>(baseFeedbacks)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [filterStatus, setFilterStatus] = useState<FeedbackStatus | "all">("all")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(true)
 
   const selected = feedbacks.find((f) => f.id === selectedId) ?? null
   const filtered = feedbacks.filter((f) => filterStatus === "all" || f.status === filterStatus)
   const unreadCount = isAdmin ? feedbacks.filter((f) => !f.isRead).length : 0
+
+  async function loadFeedbacks() {
+    setError("")
+    try {
+      const projectRows = await backend.projects(isAdmin)
+      const nextProjects = projectRows.map((row) => normalizeProject(row) as Project)
+      setProjects(nextProjects)
+
+      const rows = isAdmin
+        ? await backend.allFeedbacks()
+        : (await Promise.all(nextProjects.map((project) => backend.feedbacks(project.id)))).flat()
+
+      const nextFeedbacks = await Promise.all(rows.map(async (row: any) => {
+        const comments = await backend.feedbackReplies(Number(row.id)).catch(() => [])
+        return normalizeFeedback(row, comments, user)
+      }))
+      setFeedbacks(nextFeedbacks)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ไม่สามารถโหลด feedback ได้")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadFeedbacks()
+  }, [isAdmin])
 
   function handleSelect(id: number) {
     setSelectedId(id)
@@ -35,54 +61,49 @@ export default function FeedbackPage() {
     }
   }
 
-  function handleCreate(data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) {
-    const proj = MOCK_PROJECTS.find((p) => p.id === data.projectId)
-    const newFeedback: Feedback = {
-      id: Date.now(), ...data,
-      authorId: user.id, authorName: user.username,
-      status: "sent", createdAt: new Date(), updatedAt: new Date(),
-      isRead: false, comments: [],
-    }
-    setFeedbacks((prev) => [newFeedback, ...prev])
-    addNotif({
-      type: "feedback",
-      title: "มี Feedback ใหม่",
-      message: `${user.username} ส่ง feedback "${data.title}" ใน ${proj?.name}`,
-      forUserId: "all",
-    })
-    setShowCreate(false)
-  }
-
-  function handleStatusChange(feedbackId: number, status: FeedbackStatus) {
-    const f = feedbacks.find((x) => x.id === feedbackId)
-    setFeedbacks((prev) => prev.map((x) => x.id === feedbackId ? { ...x, status, updatedAt: new Date() } : x))
-    if (f) {
+  async function handleCreate(data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) {
+    setError("")
+    try {
+      await backend.createFeedback(data.projectId, {
+        title: data.title,
+        message: data.description,
+        priority: data.priority,
+      })
+      const proj = projects.find((p) => p.id === data.projectId)
       addNotif({
         type: "feedback",
-        title: "สถานะ Feedback เปลี่ยนแปลง",
-        message: `"${f.title}" → ${FEEDBACK_STATUS_CONFIG[status].label}`,
-        forUserId: f.authorId,
+        title: "มี Feedback ใหม่",
+        message: `${user.username} ส่ง feedback "${data.title}" ใน ${proj?.name || "โปรเจค"}`,
+        forUserId: "all",
       })
+      setShowCreate(false)
+      await loadFeedbacks()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ส่ง feedback ไม่สำเร็จ")
     }
   }
 
-  function handleComment(feedbackId: number, message: string) {
-    const comment: FeedbackComment = {
-      id: Date.now(), authorId: user.id,
-      authorName: user.username, authorRole: user.role,
-      message, createdAt: new Date(),
+  async function handleStatusChange(feedbackId: number, status: FeedbackStatus) {
+    setError("")
+    try {
+      await backend.updateFeedbackStatus(feedbackId, status)
+      setFeedbacks((prev) => prev.map((item) => item.id === feedbackId ? { ...item, status, updatedAt: new Date() } : item))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เปลี่ยนสถานะไม่สำเร็จ")
     }
-    const f = feedbacks.find((x) => x.id === feedbackId)
-    setFeedbacks((prev) => prev.map((x) =>
-      x.id === feedbackId ? { ...x, comments: [...x.comments, comment], updatedAt: new Date() } : x
-    ))
-    if (isAdmin && f) {
-      addNotif({
-        type: "feedback",
-        title: "Admin ตอบกลับ Feedback",
-        message: `Admin ตอบกลับ "${f.title}"`,
-        forUserId: f.authorId,
-      })
+  }
+
+  async function handleComment(feedbackId: number, message: string) {
+    setError("")
+    try {
+      await backend.createFeedbackReply(feedbackId, message)
+      const comments = await backend.feedbackReplies(feedbackId)
+      setFeedbacks((prev) => prev.map((item) => item.id === feedbackId
+        ? { ...item, comments: comments.map((row: any) => normalizeReply(row, user)), updatedAt: new Date() }
+        : item
+      ))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ส่งข้อความไม่สำเร็จ")
     }
   }
 
@@ -115,6 +136,9 @@ export default function FeedbackPage() {
         </span>
       </div>
 
+      {error && <div style={{ color: "#f87171", marginBottom: 14 }}>{error}</div>}
+      {loading && <div style={{ color: "#6b7280", marginBottom: 14 }}>กำลังโหลด feedback...</div>}
+
       {/* 2-column layout */}
       <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 14, height: "calc(100vh - 230px)" }}>
 
@@ -137,7 +161,7 @@ export default function FeedbackPage() {
             ) : filtered.map((f) => {
               const { color } = FEEDBACK_STATUS_CONFIG[f.status]
               const { color: pColor } = FEEDBACK_PRIORITY_CONFIG[f.priority]
-              const proj = MOCK_PROJECTS.find((p) => p.id === f.projectId)
+              const proj = projects.find((p) => p.id === f.projectId)
               const isSelected = selectedId === f.id
               return (
                 <div key={f.id} onClick={() => handleSelect(f.id)}
@@ -187,6 +211,7 @@ export default function FeedbackPage() {
               currentUserId={user.id}
               currentUsername={user.username}
               currentRole={user.role}
+              projectName={projects.find((project) => project.id === selected.projectId)?.name || "โปรเจค"}
               onStatusChange={handleStatusChange}
               onComment={handleComment}
             />
@@ -198,6 +223,7 @@ export default function FeedbackPage() {
         <CreateModal
           userId={user.id}
           isAdmin={isAdmin}
+          projects={projects}
           onClose={() => setShowCreate(false)}
           onCreate={handleCreate}
         />
@@ -208,17 +234,17 @@ export default function FeedbackPage() {
 
 // ─── Feedback Detail ──────────────────────────────────────────────────────────
 
-function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, currentRole, onStatusChange, onComment }: {
+function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, currentRole, projectName, onStatusChange, onComment }: {
   feedback: Feedback
   isAdmin: boolean
   currentUserId: number
   currentUsername: string
   currentRole: "admin" | "customer"
-  onStatusChange: (id: number, status: FeedbackStatus) => void
-  onComment: (id: number, message: string) => void
+  projectName: string
+  onStatusChange: (id: number, status: FeedbackStatus) => void | Promise<void>
+  onComment: (id: number, message: string) => void | Promise<void>
 }) {
   const [newComment, setNewComment] = useState("")
-  const proj = MOCK_PROJECTS.find((p) => p.id === f.projectId)
   const { color: sColor, label: sLabel } = FEEDBACK_STATUS_CONFIG[f.status]
   const { color: pColor, label: pLabel } = FEEDBACK_PRIORITY_CONFIG[f.priority]
 
@@ -236,7 +262,7 @@ function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, 
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: "#f9fafb", marginBottom: 4 }}>{f.title}</div>
             <div style={{ fontSize: 12, color: "#6b7280" }}>
-              โดย {f.authorName} · {proj?.name} · {f.createdAt.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+              โดย {f.authorName} · {projectName} · {f.createdAt.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
@@ -325,13 +351,14 @@ function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, 
 
 // ─── Create Modal ─────────────────────────────────────────────────────────────
 
-function CreateModal({ userId, isAdmin, onClose, onCreate }: {
+function CreateModal({ userId, isAdmin, projects, onClose, onCreate }: {
   userId: number
   isAdmin: boolean
+  projects: Project[]
   onClose: () => void
-  onCreate: (data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) => void
+  onCreate: (data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) => void | Promise<void>
 }) {
-  const myProjects = MOCK_PROJECTS.filter((p) => isAdmin || p.ownerId === userId)
+  const myProjects = projects.filter((p) => isAdmin || p.ownerId === userId)
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -388,6 +415,35 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   )
+}
+
+function normalizeFeedback(row: any, replies: any[], currentUser: { id: number; username: string; role: "admin" | "customer" }): Feedback {
+  return {
+    id: Number(row.id),
+    title: row.title || "",
+    description: row.description ?? row.message ?? "",
+    projectId: Number(row.projectId ?? row.project_id),
+    priority: (row.priority || "medium") as FeedbackPriority,
+    authorId: Number(row.authorId ?? row.user_id),
+    authorName: row.authorName ?? row.username ?? "ผู้ใช้งาน",
+    status: (row.status || "sent") as FeedbackStatus,
+    createdAt: new Date(row.createdAt ?? row.created_at ?? Date.now()),
+    updatedAt: new Date(row.updatedAt ?? row.updated_at ?? row.created_at ?? Date.now()),
+    isRead: Boolean(row.isRead ?? row.is_read ?? false),
+    comments: replies.map((reply) => normalizeReply(reply, currentUser)),
+  }
+}
+
+function normalizeReply(row: any, currentUser: { id: number; username: string; role: "admin" | "customer" }): FeedbackComment {
+  const authorId = Number(row.authorId ?? row.user_id)
+  return {
+    id: Number(row.id),
+    authorId,
+    authorName: row.authorName ?? row.username ?? "ผู้ใช้งาน",
+    authorRole: authorId === currentUser.id ? currentUser.role : (currentUser.role === "admin" ? "customer" : "admin"),
+    message: row.message || "",
+    createdAt: new Date(row.createdAt ?? row.created_at ?? Date.now()),
+  }
 }
 
 const S: Record<string, React.CSSProperties> = {

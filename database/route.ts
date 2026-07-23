@@ -91,6 +91,33 @@ export async function updateProjectStatus(id: number, status: string) {
   return result.rows[0]
 }
 
+
+export async function updateAdminProject(
+  id: number,
+  name?: string,
+  description?: string,
+  status?: string,
+  domain?: string,
+  start_date?: string,
+  package_name?: string,
+  token?: string
+) {
+  const result = await db.query(
+    `UPDATE projects SET
+       name = COALESCE($1, name),
+       description = COALESCE($2, description),
+       status = COALESCE($3, status),
+       domain = COALESCE($4, domain),
+       start_date = COALESCE($5, start_date),
+       package = COALESCE($6, package),
+       token = COALESCE($7, token)
+     WHERE id = $8 RETURNING *`,
+    [name, description, status, domain, start_date || null, package_name, token, id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบโปรเจค")
+  return result.rows[0]
+}
+
 // Admin: ดู users ทั้งหมด
 export async function getAllUsers() {
   const result = await db.query(

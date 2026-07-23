@@ -299,7 +299,7 @@ function PreviewModal({ doc, onClose }: { doc: DocumentWithUrl; onClose: () => v
   const FileIcon = doc.fileType === "image" ? FileImage : doc.fileType === "pdf" ? FileText : File
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={{ ...S.modal, maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...S.modal, maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
         <div style={S.modalHeader}>
           <div style={S.modalTitle}>รายละเอียดเอกสาร</div>
           <button onClick={onClose} style={S.closeBtn}>✕</button>
@@ -307,7 +307,7 @@ function PreviewModal({ doc, onClose }: { doc: DocumentWithUrl; onClose: () => v
         <div style={{ ...S.modalBody, gap: 0 }}>
           <div style={{ display: "flex", justifyContent: "center", padding: "20px 0" }}>
             {doc.fileType === "image" && doc.fileUrl ? (
-              <img src={doc.fileUrl} style={{ width: 120, height: 120, borderRadius: 14, objectFit: "cover" }} />
+              <img src={doc.fileUrl} alt={doc.name} style={{ width: "100%", maxHeight: 420, borderRadius: 14, objectFit: "contain" }} />
             ) : (
               <div style={{ ...S.fileIcon, width: 56, height: 56, borderRadius: 14, background: color + "22", color }}><FileIcon size={28} /></div>
             )}

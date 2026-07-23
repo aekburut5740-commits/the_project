@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
 
 export default function CreateAccountPage() {
 	const router = useRouter();
@@ -28,11 +27,15 @@ export default function CreateAccountPage() {
 
 		setLoading(true);
 		try {
-			const data = await apiFetch("/api/register", {
+			const res = await fetch("http://localhost:4000/api/register", {
 				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
+				},
 				body: JSON.stringify({ username, email, password })
 			});
-			if (!data.user) throw new Error(data.message || "ไม่สามารถสร้างบัญชีได้");
+			const data = await res.json();
+			if (!res.ok || !data.user) throw new Error(data.message || "ไม่สามารถสร้างบัญชีได้");
 			router.push("/login");
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "ไม่สามารถสร้างบัญชีได้");

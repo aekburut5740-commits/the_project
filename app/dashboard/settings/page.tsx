@@ -20,6 +20,8 @@ export default function SettingsPage() {
   const [avatar, setAvatar] = useState<string | null>(null)
   const [oldPassword, setOldPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
+  const [saveMessage, setSaveMessage] = useState("")
+  const [saveError, setSaveError] = useState("")
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -38,20 +40,36 @@ export default function SettingsPage() {
   }, [isAdmin])
 
   const handleSaveProfile = async () => {
+    setSaveMessage("")
+    setSaveError("")
     try {
-      await backend.updateProfile(username, email)
+      const updated = await backend.updateProfile(username, email) as any
+      setUsername(updated.username ?? username)
+      setEmail(updated.email ?? email)
       setEditing(false)
+      setSaveMessage("บันทึกข้อมูลบัญชีสำเร็จ")
     } catch (error) {
+      const message = error instanceof Error ? error.message : "บันทึกข้อมูลบัญชีไม่สำเร็จ"
+      setSaveError(message)
       console.error("Error occurred while updating profile:", error)
     }
   }
 
   const handleChangePassword = async () => {
+    setSaveMessage("")
+    setSaveError("")
+    if (!oldPassword || !newPassword) {
+      setSaveError("กรุณากรอกรหัสผ่านเดิมและรหัสผ่านใหม่")
+      return
+    }
     try {
       await backend.changePassword(oldPassword, newPassword)
       setOldPassword("")
       setNewPassword("")
+      setSaveMessage("เปลี่ยนรหัสผ่านสำเร็จ")
     } catch (error) {
+      const message = error instanceof Error ? error.message : "เปลี่ยนรหัสผ่านไม่สำเร็จ"
+      setSaveError(message)
       console.error("Error occurred while changing password:", error)
     }
   }
@@ -156,6 +174,9 @@ export default function SettingsPage() {
                     ปรับชื่อผู้ใช้งานและอีเมลได้จากที่นี่ หากต้องการเปลี่ยนรหัสผ่านให้ใช้ฟอร์มด้านล่าง
                   </p>
                 </div>
+
+                {saveMessage && <div className="mb-5 rounded-2xl border border-emerald-800 bg-emerald-950/50 px-4 py-3 text-sm text-emerald-300">{saveMessage}</div>}
+                {saveError && <div className="mb-5 rounded-2xl border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300">{saveError}</div>}
 
                 <div className="grid gap-6 md:grid-cols-2">
                   <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-4">
