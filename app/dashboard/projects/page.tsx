@@ -164,7 +164,12 @@ export default function ProjectsPage() {
 }
 
 function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmin: boolean; onEdit: () => void }) {
-  const { color, label } = STATUS_CONFIG[p.status]
+  const statusConfig = STATUS_CONFIG[p.status] || {
+    label: p.status || "ไม่ระบุสถานะ",
+    color: "#6b7280",
+  }
+
+  const { color, label } = statusConfig
   const detailHref = `/dashboard/projects/${p.id}`
 
   return (
@@ -213,7 +218,7 @@ function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmi
       </div>
       <Link
         href={detailHref}
-        style={{ padding:"3px",margin:"0px 0px 10px 0px", textAlign: "center", fontSize: 16, fontWeight: 200, background: color + "22", color, border: "1px solid gray", borderRadius:"14px 14px 14px 14px" }}
+        style={{ padding: "3px", margin: "0px 0px 10px 0px", textAlign: "center", fontSize: 16, fontWeight: 200, background: color + "22", color, border: "1px solid gray", borderRadius: "14px 14px 14px 14px" }}
       >detail</Link>
       {isAdmin && (
         <div style={{ borderTop: "1px solid #1f2937", padding: "12px 22px 20px", display: "flex", justifyContent: "flex-end" }}>

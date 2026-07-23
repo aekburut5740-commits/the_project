@@ -10,7 +10,7 @@ import {
   type Project, type Milestone,
 } from "@/lib/mockData"
 import { backend, normalizeMilestone, normalizeProject } from "@/lib/backend"
-import { getUser } from "@/lib/auth"
+import { getUser, type JwtUser } from "@/lib/auth"
 
 const PROGRESS_OVER_TIME = [
   { week: "W1", progress: 0 },
@@ -32,17 +32,20 @@ const GIT_PULSE = [
 ]
 
 export default function DashboardPage() {
-  const user = getUser() || { id: 0, username: "", role: "customer" as const }
-  const isAdmin = user.role === "admin"
+  const [user, setUser] = useState<JwtUser | null>(null)
+  const isAdmin = user?.role === "admin"
   const [projects, setProjects] = useState<Project[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
+    const currentUser = getUser()
+    setUser(currentUser)
+
     const load = async () => {
       try {
-        const projectRows = await backend.projects(isAdmin)
+        const projectRows = await backend.projects(currentUser?.role === "admin")
         const nextProjects = projectRows.map((row) => normalizeProject(row) as Project)
         setProjects(nextProjects)
         const milestoneRows = await Promise.all(nextProjects.map((project) => backend.milestones(project.id)))
@@ -54,7 +57,7 @@ export default function DashboardPage() {
       }
     }
     load()
-  }, [isAdmin])
+  }, [])
 
   const totalProjects = projects.length
   const completedProjects = projects.filter((p) => p.status === "completed").length
@@ -78,7 +81,9 @@ export default function DashboardPage() {
       <div style={{ marginBottom: 28 }}>
         <h1 style={S.title}>Dashboard</h1>
         <p style={S.subtitle}>
-          {isAdmin ? "ภาพรวมทุกโปรเจค" : `โปรเจคของคุณ · ${user.username}`}
+          {user
+            ? (isAdmin ? "ภาพรวมทุกโปรเจค" : `โปรเจคของคุณ · ${user.username}`)
+            : "กำลังโหลดข้อมูลผู้ใช้..."}
         </p>
       </div>
 
@@ -145,7 +150,8 @@ export default function DashboardPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {projects.map((p) => {
-                const { color } = STATUS_CONFIG[p.status]
+                const statusConfig = STATUS_CONFIG[p.status] || { label: p.status || "ไม่ระบุสถานะ", color: "#6b7280" }
+                const { color } = statusConfig
                 return (
                   <div key={p.id} style={S.projectRow}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -161,7 +167,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>
-                      {STATUS_CONFIG[p.status].label}
+                      {statusConfig.label}
                     </span>
                   </div>
                 )
