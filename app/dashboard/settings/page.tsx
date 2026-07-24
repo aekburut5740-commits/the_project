@@ -1,339 +1,776 @@
 "use client"
 
-import React, { useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Camera, Bell, User as UserIcon, Mail, Lock, ArrowRight } from "lucide-react"
-import { type User } from "@/lib/mockData"
-import { getUser } from "@/lib/auth"
+import {
+  ArrowRight,
+  Bell,
+  Lock,
+  RefreshCw,
+  ShieldCheck,
+  UserRound,
+  UsersRound,
+  Wrench,
+} from "lucide-react"
+import { getUser, setToken } from "@/lib/auth"
 import { backend } from "@/lib/backend"
 
-export default function SettingsPage() {
-  const user = getUser() || { id: 0, username: "", role: "customer" as const }
-  const isAdmin = user.role === "admin"
-  const [username, setUsername] = useState(user.username)
-  const [email, setEmail] = useState("")
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
-  const [editing, setEditing] = useState(false)
-  const [users, setUsers] = useState<import("@/lib/mockData").User[]>([])
-  const [maintenanceMode, setMaintenanceMode] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [avatar, setAvatar] = useState<string | null>(null)
-  const [oldPassword, setOldPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [saveMessage, setSaveMessage] = useState("")
-  const [saveError, setSaveError] = useState("")
+type Tab = "account" | "notifications" | "users" | "system"
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const profile = await backend.profile()
-        setUsername(profile.user.username)
-        setEmail((profile.user as any).email || "")
-        const maintenance = await backend.maintenance()
-        setMaintenanceMode(Boolean(maintenance?.is_active))
-        if (isAdmin) setUsers(await backend.users())
-      } catch (error) {
-        console.error("Error occurred while loading settings:", error)
-      }
-    }
-    loadSettings()
-  }, [isAdmin])
+type ProfileUser = {
+  id: number
+  username: string
+  email?: string
+  role: "admin" | "customer" | string
+}
 
-  const handleSaveProfile = async () => {
-    setSaveMessage("")
-    setSaveError("")
-    try {
-      const updated = await backend.updateProfile(username, email) as any
-      setUsername(updated.username ?? username)
-      setEmail(updated.email ?? email)
-      setEditing(false)
-      setSaveMessage("บันทึกข้อมูลบัญชีสำเร็จ")
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "บันทึกข้อมูลบัญชีไม่สำเร็จ"
-      setSaveError(message)
-      console.error("Error occurred while updating profile:", error)
-    }
+type SystemUser = {
+  id: number
+  username: string
+  email?: string
+  role: "admin" | "customer" | string
+  created_at?: string
+  createdAt?: string
+}
+
+const NOTIFICATION_STORAGE_KEY = "nexus_notifications_enabled"
+
+function normalizeUser(row: any): SystemUser {
+  return {
+    id: Number(row?.id ?? 0),
+    username: String(row?.username ?? "ไม่ระบุชื่อ"),
+    email: row?.email ? String(row.email) : "",
+    role: String(row?.role ?? "customer"),
+    created_at: row?.created_at ?? row?.createdAt ?? "",
   }
+}
 
-  const handleChangePassword = async () => {
-    setSaveMessage("")
-    setSaveError("")
-    if (!oldPassword || !newPassword) {
-      setSaveError("กรุณากรอกรหัสผ่านเดิมและรหัสผ่านใหม่")
-      return
-    }
-    try {
-      await backend.changePassword(oldPassword, newPassword)
-      setOldPassword("")
-      setNewPassword("")
-      setSaveMessage("เปลี่ยนรหัสผ่านสำเร็จ")
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "เปลี่ยนรหัสผ่านไม่สำเร็จ"
-      setSaveError(message)
-      console.error("Error occurred while changing password:", error)
-    }
-  }
+function formatDate(value?: string) {
+  if (!value) return "ไม่ระบุ"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "ไม่ระบุ"
+  return date.toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+}
 
-  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setAvatar(reader.result as string)
-    reader.readAsDataURL(file)
-  }
+function getInitials(username: string) {
+  const trimmed = username.trim()
+  if (!trimmed) return "U"
 
-  function toggleNotifications() {
-    setNotificationsEnabled((current) => !current)
-  }
-
-  const initials = username
-    .split(" ")
+  return trimmed
+    .split(/\s+/)
     .map((part) => part[0])
     .join("")
     .toUpperCase()
     .slice(0, 2)
+}
 
-  const [activeTab, setActiveTab] = useState<"account" | "notifications" | "users" | "system">("account")
+export default function SettingsPage() {
+  const tokenUser = getUser()
+  const isAdmin = tokenUser?.role === "admin"
 
-  async function toggleMaintenance() {
-    const next = !maintenanceMode
-    try { await backend.setMaintenance(next); setMaintenanceMode(next) } catch (error) { console.error("Error occurred while updating maintenance:", error) }
+  const [activeTab, setActiveTab] = useState<Tab>("account")
+
+  const [profile, setProfile] = useState<ProfileUser>({
+    id: Number(tokenUser?.id ?? 0),
+    username: tokenUser?.username ?? "",
+    email: "",
+    role: tokenUser?.role ?? "customer",
+  })
+  const [username, setUsername] = useState(tokenUser?.username ?? "")
+  const [email, setEmail] = useState("")
+  const [oldPassword, setOldPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [users, setUsers] = useState<SystemUser[]>([])
+  const [maintenanceMode, setMaintenanceMode] = useState(false)
+  const [maintenanceMessage, setMaintenanceMessage] = useState("")
+
+  const [loading, setLoading] = useState(true)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [savingMaintenance, setSavingMaintenance] = useState(false)
+  const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
+
+  const loadSettings = useCallback(async () => {
+    setLoading(true)
+    setError("")
+
+    try {
+      const profileResponse = (await backend.profile()) as {
+        user?: ProfileUser
+      }
+
+      const loadedProfile: ProfileUser = {
+        id: Number(profileResponse?.user?.id ?? tokenUser?.id ?? 0),
+        username: String(
+          profileResponse?.user?.username ?? tokenUser?.username ?? ""
+        ),
+        email: String(profileResponse?.user?.email ?? ""),
+        role: String(
+          profileResponse?.user?.role ?? tokenUser?.role ?? "customer"
+        ),
+      }
+
+      setProfile(loadedProfile)
+      setUsername(loadedProfile.username)
+      setEmail(loadedProfile.email ?? "")
+
+      const storedNotificationValue = window.localStorage.getItem(
+        NOTIFICATION_STORAGE_KEY
+      )
+      setNotificationsEnabled(storedNotificationValue !== "false")
+
+      if (isAdmin) {
+        const [maintenanceResponse, userRows] = await Promise.all([
+          backend.maintenance(),
+          backend.users(),
+        ])
+
+        setMaintenanceMode(Boolean(maintenanceResponse?.is_active))
+        setMaintenanceMessage(String(maintenanceResponse?.message ?? ""))
+        setUsers(
+          (Array.isArray(userRows) ? userRows : [])
+            .map(normalizeUser)
+            .filter((item) => item.id > 0)
+        )
+      }
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "ไม่สามารถโหลดการตั้งค่าได้"
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [isAdmin, tokenUser?.id, tokenUser?.role, tokenUser?.username])
+
+  useEffect(() => {
+    void loadSettings()
+  }, [loadSettings])
+
+  const profileChanged =
+    username.trim() !== profile.username ||
+    email.trim() !== (profile.email ?? "")
+
+  const adminCount = useMemo(
+    () => users.filter((item) => item.role === "admin").length,
+    [users]
+  )
+
+  const customerCount = users.length - adminCount
+
+  function clearStatus() {
+    setMessage("")
+    setError("")
   }
 
-  function toggleUserRole(id: number) {
-    setUsers((current) => current.map((item) =>
-      item.id === id
-        ? { ...item, role: item.role === "admin" ? "customer" : "admin" }
-        : item
-    ))
+  async function handleSaveProfile() {
+    clearStatus()
+
+    const cleanUsername = username.trim()
+    const cleanEmail = email.trim()
+
+    if (!cleanUsername) {
+      setError("กรุณากรอกชื่อผู้ใช้งาน")
+      return
+    }
+
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError("รูปแบบอีเมลไม่ถูกต้อง")
+      return
+    }
+
+    setSavingProfile(true)
+
+    try {
+      const response = (await backend.updateProfile(
+        cleanUsername,
+        cleanEmail
+      )) as any
+
+      const updatedUser = response?.user ?? response ?? {}
+      const nextProfile: ProfileUser = {
+        id: Number(updatedUser.id ?? profile.id),
+        username: String(updatedUser.username ?? cleanUsername),
+        email: String(updatedUser.email ?? cleanEmail),
+        role: String(updatedUser.role ?? profile.role),
+      }
+
+      setProfile(nextProfile)
+      setUsername(nextProfile.username)
+      setEmail(nextProfile.email ?? "")
+
+      // บาง Backend จะคืน token ใหม่หลังเปลี่ยน username
+      if (typeof response?.token === "string" && response.token) {
+        setToken(response.token)
+      }
+
+      setMessage("บันทึกข้อมูลบัญชีสำเร็จ")
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "บันทึกข้อมูลบัญชีไม่สำเร็จ"
+      )
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
-  function deleteUser(id: number) {
-    if (id === user.id) return
-    setUsers((current) => current.filter((item) => item.id !== id))
+  async function handleChangePassword() {
+    clearStatus()
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setError("กรุณากรอกรหัสผ่านให้ครบทุกช่อง")
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setError("รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน")
+      return
+    }
+
+    if (oldPassword === newPassword) {
+      setError("รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเดิม")
+      return
+    }
+
+    setChangingPassword(true)
+
+    try {
+      await backend.changePassword(oldPassword, newPassword)
+      setOldPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setMessage("เปลี่ยนรหัสผ่านสำเร็จ")
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "เปลี่ยนรหัสผ่านไม่สำเร็จ"
+      )
+    } finally {
+      setChangingPassword(false)
+    }
   }
+
+  function handleNotificationToggle() {
+    const nextValue = !notificationsEnabled
+    setNotificationsEnabled(nextValue)
+    window.localStorage.setItem(
+      NOTIFICATION_STORAGE_KEY,
+      String(nextValue)
+    )
+    setMessage(
+      nextValue
+        ? "เปิดการแจ้งเตือนสำหรับเบราว์เซอร์นี้แล้ว"
+        : "ปิดการแจ้งเตือนสำหรับเบราว์เซอร์นี้แล้ว"
+    )
+    setError("")
+  }
+
+  async function handleSaveMaintenance() {
+    if (!isAdmin) return
+
+    clearStatus()
+    setSavingMaintenance(true)
+
+    try {
+      await backend.setMaintenance(
+        maintenanceMode,
+        maintenanceMessage.trim()
+      )
+      setMessage(
+        maintenanceMode
+          ? "เปิด Maintenance Mode สำเร็จ"
+          : "ปิด Maintenance Mode สำเร็จ"
+      )
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "บันทึกสถานะระบบไม่สำเร็จ"
+      )
+    } finally {
+      setSavingMaintenance(false)
+    }
+  }
+
+  const tabs: Array<{
+    id: Tab
+    label: string
+    icon: React.ReactNode
+    adminOnly?: boolean
+  }> = [
+    {
+      id: "account",
+      label: "ข้อมูลบัญชี",
+      icon: <UserRound size={17} />,
+    },
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: <Bell size={17} />,
+    },
+    {
+      id: "users",
+      label: "จัดการผู้ใช้",
+      icon: <UsersRound size={17} />,
+      adminOnly: true,
+    },
+    {
+      id: "system",
+      label: "ระบบ",
+      icon: <Wrench size={17} />,
+      adminOnly: true,
+    },
+  ]
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-8">
+    <main className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-8">
+        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold text-white">Settings</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-400">
-              จัดการข้อมูลบัญชีและการแจ้งเตือนหลัก โดยไม่ซ้ำกับหน้าการแจ้งเตือนหลักของระบบ
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
+              จัดการข้อมูลบัญชี รหัสผ่าน และการตั้งค่าที่ระบบรองรับจริง
             </p>
           </div>
-        </div>
 
-        <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <aside className="space-y-4 rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/20">
-            <p className="text-sm uppercase tracking-[0.22em] text-slate-500">เมนู Setting</p>
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab("account")}
-                className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "account" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
-              >
-                ข้อมูลบัญชี
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("notifications")}
-                className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "notifications" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
-              >
-                Notifications
-              </button>
-              {isAdmin && (
-                <>
+          <button
+            type="button"
+            onClick={() => void loadSettings()}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw
+              size={16}
+              className={loading ? "animate-spin" : ""}
+            />
+            {loading ? "กำลังโหลด..." : "รีเฟรช"}
+          </button>
+        </header>
+
+        {(message || error) && (
+          <div
+            role="status"
+            className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
+              error
+                ? "border-red-800 bg-red-950/50 text-red-300"
+                : "border-emerald-800 bg-emerald-950/50 text-emerald-300"
+            }`}
+          >
+            {error || message}
+          </div>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-[230px_minmax(0,1fr)]">
+          <aside className="h-fit space-y-4 rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/20">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+              เมนู Settings
+            </p>
+
+            <nav className="space-y-2">
+              {tabs
+                .filter((tab) => !tab.adminOnly || isAdmin)
+                .map((tab) => (
                   <button
+                    key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab("users")}
-                    className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "users" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
+                    onClick={() => {
+                      setActiveTab(tab.id)
+                      clearStatus()
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
+                      activeTab === tab.id
+                        ? "bg-slate-800 text-white shadow-inner"
+                        : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"
+                    }`}
                   >
-                    จัดการผู้ใช้
+                    {tab.icon}
+                    {tab.label}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("system")}
-                    className={`w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === "system" ? "bg-slate-800 text-white shadow-inner" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"}`}
-                  >
-                    ระบบ
-                  </button>
-                </>
-              )}
+                ))}
+            </nav>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 font-bold text-slate-950">
+                  {getInitials(profile.username)}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">
+                    {profile.username || "ไม่ระบุชื่อ"}
+                  </p>
+                  <p className="mt-1 text-xs capitalize text-slate-500">
+                    {profile.role}
+                  </p>
+                </div>
+              </div>
             </div>
           </aside>
 
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl shadow-black/20">
-            {activeTab === "account" ? (
+          <section className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/20 sm:p-8">
+            {loading ? (
+              <div className="py-20 text-center text-sm text-slate-400">
+                กำลังโหลดการตั้งค่า...
+              </div>
+            ) : activeTab === "account" ? (
               <>
                 <div className="mb-8">
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">ข้อมูลบัญชี</p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">แก้ไขข้อมูลบัญชี</h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                    ปรับชื่อผู้ใช้งานและอีเมลได้จากที่นี่ หากต้องการเปลี่ยนรหัสผ่านให้ใช้ฟอร์มด้านล่าง
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">
+                    Account
+                  </p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">
+                    ข้อมูลบัญชี
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
+                    ชื่อผู้ใช้ อีเมล และรหัสผ่านในหน้านี้บันทึกผ่าน Backend
+                    โดยตรง
                   </p>
                 </div>
 
-                {saveMessage && <div className="mb-5 rounded-2xl border border-emerald-800 bg-emerald-950/50 px-4 py-3 text-sm text-emerald-300">{saveMessage}</div>}
-                {saveError && <div className="mb-5 rounded-2xl border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300">{saveError}</div>}
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-4">
-                    <span className="text-sm font-semibold text-slate-300">ชื่อผู้ใช้งาน</span>
+                <div className="grid gap-5 md:grid-cols-2">
+                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+                    <span className="text-sm font-semibold text-slate-300">
+                      ชื่อผู้ใช้งาน
+                    </span>
                     <input
                       value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      className="mt-3 w-full bg-transparent text-white outline-none"
+                      onChange={(event) => setUsername(event.target.value)}
+                      autoComplete="username"
+                      className="mt-3 w-full border-b border-slate-800 bg-transparent pb-2 text-white outline-none transition focus:border-sky-500"
                     />
                   </label>
-                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-4">
-                    <span className="text-sm font-semibold text-slate-300">อีเมล</span>
+
+                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+                    <span className="text-sm font-semibold text-slate-300">
+                      อีเมล
+                    </span>
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="mt-3 w-full bg-transparent text-white outline-none"
+                      onChange={(event) => setEmail(event.target.value)}
+                      autoComplete="email"
+                      placeholder="name@example.com"
+                      className="mt-3 w-full border-b border-slate-800 bg-transparent pb-2 text-white outline-none transition focus:border-sky-500"
                     />
                   </label>
                 </div>
 
-                <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
-                  <div className="flex items-center gap-3 text-slate-300">
-                    <Lock size={18} />
-                    <div>
-                      <p className="text-sm font-semibold">เปลี่ยนรหัสผ่าน</p>
-                      <p className="text-sm text-slate-500">ตั้งค่ารหัสผ่านใหม่หรือรีเซ็ตรหัสผ่านได้ที่นี่</p>
-                    </div>
+                <div className="mt-5 flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      บันทึกข้อมูลบัญชี
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {profileChanged
+                        ? "มีข้อมูลที่ยังไม่ได้บันทึก"
+                        : "ข้อมูลล่าสุดถูกบันทึกแล้ว"}
+                    </p>
                   </div>
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <input value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} placeholder="รหัสผ่านเดิม" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
-                    <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="รหัสผ่านใหม่" type="password" className="w-full rounded-3xl border border-slate-800 bg-slate-950/70 px-4 py-4 text-white outline-none" />
-                  </div>
-                  <button type="button" onClick={handleChangePassword} className="mt-4 inline-flex items-center justify-center rounded-3xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition">
-                    เปลี่ยนรหัสผ่าน
+
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveProfile()}
+                    disabled={!profileChanged || savingProfile}
+                    className="inline-flex items-center justify-center rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingProfile ? "กำลังบันทึก..." : "บันทึกข้อมูล"}
                   </button>
                 </div>
 
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-slate-400">บันทึกการเปลี่ยนแปลงข้อมูลบัญชี</p>
+                <div className="mt-7 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:p-6">
+                  <div className="flex items-center gap-3 text-slate-300">
+                    <Lock size={18} />
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        เปลี่ยนรหัสผ่าน
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        กรอกรหัสผ่านเดิมและยืนยันรหัสผ่านใหม่ก่อนบันทึก
+                      </p>
+                    </div>
                   </div>
-                  <button type="button" onClick={handleSaveProfile} className="inline-flex items-center justify-center rounded-3xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition">
-                    บันทึกการตั้งค่า
+
+                  <div className="mt-5 grid gap-4">
+                    <input
+                      value={oldPassword}
+                      onChange={(event) => setOldPassword(event.target.value)}
+                      placeholder="รหัสผ่านเดิม"
+                      type="password"
+                      autoComplete="current-password"
+                      className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-500"
+                    />
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <input
+                        value={newPassword}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        placeholder="รหัสผ่านใหม่"
+                        type="password"
+                        autoComplete="new-password"
+                        className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-500"
+                      />
+                      <input
+                        value={confirmPassword}
+                        onChange={(event) =>
+                          setConfirmPassword(event.target.value)
+                        }
+                        placeholder="ยืนยันรหัสผ่านใหม่"
+                        type="password"
+                        autoComplete="new-password"
+                        className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleChangePassword()}
+                    disabled={changingPassword}
+                    className="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {changingPassword
+                      ? "กำลังเปลี่ยนรหัสผ่าน..."
+                      : "เปลี่ยนรหัสผ่าน"}
                   </button>
                 </div>
               </>
             ) : activeTab === "notifications" ? (
               <>
                 <div className="mb-8">
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">Notifications</p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">ตั้งค่าการแจ้งเตือน</h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                    เปิด/ปิดการแจ้งเตือนหลักของระบบที่เกี่ยวข้องกับหน้าการแจ้งเตือนโดยรวม
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">
+                    Notifications
+                  </p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">
+                    การแจ้งเตือนของบัญชี
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
+                    Backend ยังไม่มีช่องบันทึกการตั้งค่านี้ จึงเก็บไว้ใน
+                    Browser เครื่องนี้แทน และจะไม่หายเมื่อรีเฟรชหน้า
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-white">เปิด/ปิดการแจ้งเตือน</p>
-                      <p className="mt-2 text-sm text-slate-400">ควบคุมการแจ้งเตือนหลักของระบบในส่วนที่เกี่ยวข้องกับ user account</p>
+                      <p className="text-sm font-semibold text-white">
+                        เปิดการแจ้งเตือนใน Dashboard
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        ค่านี้ควบคุมการแสดงผลสำหรับ Browser ปัจจุบัน
+                        แต่ยังไม่ได้ลบข้อมูล Notification ในฐานข้อมูล
+                      </p>
                     </div>
+
                     <button
                       type="button"
-                      onClick={toggleNotifications}
-                      className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition ${notificationsEnabled ? "bg-sky-500 text-slate-950" : "bg-slate-800 text-slate-200"}`}
+                      role="switch"
+                      aria-checked={notificationsEnabled}
+                      onClick={handleNotificationToggle}
+                      className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        notificationsEnabled
+                          ? "bg-sky-500 text-slate-950"
+                          : "bg-slate-800 text-slate-200"
+                      }`}
                     >
                       <Bell size={16} className="mr-2" />
                       {notificationsEnabled ? "เปิดแล้ว" : "ปิดแล้ว"}
                     </button>
                   </div>
 
-                  <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-400">
-                    ปุ่มนี้สำหรับตั้งค่าการแจ้งเตือนของบัญชีโดยตรง หากต้องการจัดการ notification ทั้งหมด โปรดไปที่หน้าการแจ้งเตือนหลัก
-                  </div>
-
-                  <Link href="/dashboard/notifications"
-                    className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/75 px-4 py-3 text-sm font-semibold text-slate-100 hover:border-slate-600 hover:bg-slate-900 transition"
+                  <Link
+                    href="/dashboard/notifications"
+                    className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-600 hover:bg-slate-800"
                   >
-                    ไปที่ Notifications
+                    ไปที่หน้า Notifications
                     <ArrowRight size={16} />
                   </Link>
                 </div>
               </>
-            ) : activeTab === "users" ? (
+            ) : activeTab === "users" && isAdmin ? (
               <>
                 <div className="mb-8">
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">จัดการผู้ใช้</p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">ดูรายชื่อ User ทั้งหมด</h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                    แก้ไข Role ของผู้ใช้ หรือ ลบผู้ใช้ได้จากที่นี่ โดยเฉพาะสำหรับ admin
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">
+                    Users
+                  </p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">
+                    รายชื่อผู้ใช้ในระบบ
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
+                    หน้านี้อ่านข้อมูลจริงจาก Backend ปัจจุบัน Backend
+                    ยังไม่มี API สำหรับเปลี่ยน Role หรือลบผู้ใช้
+                    จึงยังไม่แสดงปุ่มที่ทำงานเพียงชั่วคราวบนหน้าเว็บ
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  {users.map((item) => (
-                    <div key={item.id} className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-white">{item.username}</div>
-                        <div className="mt-1 text-sm text-slate-400">Role: {item.role}</div>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={() => toggleUserRole(item.id)}
-                          className="inline-flex items-center justify-center rounded-3xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-700 transition"
-                        >
-                          เปลี่ยนเป็น {item.role === "admin" ? "customer" : "admin"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={item.id === user.id}
-                          onClick={() => deleteUser(item.id)}
-                          className="inline-flex items-center justify-center rounded-3xl border border-slate-700 bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400 transition disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          ลบ User
-                        </button>
-                      </div>
+                <div className="mb-5 grid gap-4 sm:grid-cols-3">
+                  {[
+                    ["ผู้ใช้ทั้งหมด", users.length],
+                    ["Admin", adminCount],
+                    ["Customer", customerCount],
+                  ].map(([label, value]) => (
+                    <div
+                      key={String(label)}
+                      className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        {label}
+                      </p>
+                      <p className="mt-3 text-3xl font-bold text-white">
+                        {value}
+                      </p>
                     </div>
                   ))}
                 </div>
+
+                {users.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-slate-700 px-5 py-12 text-center text-sm text-slate-500">
+                    ยังไม่มีข้อมูลผู้ใช้
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {users.map((item) => (
+                      <article
+                        key={item.id}
+                        className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex min-w-0 items-center gap-4">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-800 text-sm font-bold text-white">
+                            {getInitials(item.username)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-white">
+                              {item.username}
+                              {item.id === profile.id ? " (คุณ)" : ""}
+                            </p>
+                            <p className="mt-1 truncate text-sm text-slate-400">
+                              {item.email || "ไม่ได้ระบุอีเมล"}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-600">
+                              สร้างเมื่อ{" "}
+                              {formatDate(item.created_at ?? item.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`w-fit rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${
+                            item.role === "admin"
+                              ? "border-violet-700 bg-violet-950/50 text-violet-300"
+                              : "border-sky-800 bg-sky-950/50 text-sky-300"
+                          }`}
+                        >
+                          {item.role}
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </>
-            ) : (
+            ) : activeTab === "system" && isAdmin ? (
               <>
                 <div className="mb-8">
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">ระบบ</p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">เปิด/ปิด Maintenance Mode</h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                    ปิดระบบหรือเปิดให้เข้าบางส่วนเมื่อกำลังบำรุงรักษา สามารถใช้ฟีเจอร์นี้เฉพาะ admin เท่านั้น
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">
+                    System
+                  </p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">
+                    Maintenance Mode
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
+                    สถานะและข้อความด้านล่างบันทึกลง Backend จริง
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Maintenance Mode</p>
-                      <p className="mt-2 text-sm text-slate-400">เปลี่ยนการเข้าถึงระบบขณะบำรุงรักษา</p>
+                    <div className="flex items-start gap-3">
+                      <ShieldCheck
+                        size={20}
+                        className={
+                          maintenanceMode
+                            ? "mt-0.5 text-rose-400"
+                            : "mt-0.5 text-emerald-400"
+                        }
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          สถานะระบบ
+                        </p>
+                        <p className="mt-2 text-sm text-slate-400">
+                          {maintenanceMode
+                            ? "ระบบอยู่ใน Maintenance Mode"
+                            : "ระบบเปิดใช้งานตามปกติ"}
+                        </p>
+                      </div>
                     </div>
+
                     <button
                       type="button"
-                      onClick={toggleMaintenance}
-                      className={`${maintenanceMode ? "bg-rose-500 text-white" : "bg-slate-800 text-slate-200"} inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition`}
+                      role="switch"
+                      aria-checked={maintenanceMode}
+                      onClick={() =>
+                        setMaintenanceMode((current) => !current)
+                      }
+                      className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        maintenanceMode
+                          ? "bg-rose-500 text-white"
+                          : "bg-emerald-500 text-slate-950"
+                      }`}
                     >
                       {maintenanceMode ? "เปิดอยู่" : "ปิดอยู่"}
                     </button>
                   </div>
 
-                  <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-400">
-                    เมื่อเปิด Maintenance mode หน้าไซต์จะอยู่ในสถานะบำรุงรักษาและจำกัดการเข้าถึงสำหรับผู้ใช้ทั่วไป (ตัวอย่างนี้เป็นสถานะภายใน)
+                  <label className="mt-6 block">
+                    <span className="text-sm font-semibold text-slate-300">
+                      ข้อความ Maintenance
+                    </span>
+                    <textarea
+                      value={maintenanceMessage}
+                      onChange={(event) =>
+                        setMaintenanceMessage(event.target.value)
+                      }
+                      rows={4}
+                      placeholder="เช่น ระบบอยู่ระหว่างปรับปรุง กรุณาลองใหม่ภายหลัง"
+                      className="mt-3 w-full resize-y rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-500"
+                    />
+                  </label>
+
+                  <div className="mt-5 rounded-2xl border border-amber-900/70 bg-amber-950/30 p-4 text-sm leading-6 text-amber-200">
+                    การเปิดโหมดนี้เป็นการเปลี่ยนค่าระบบจริง
+                    ควรเปิดเฉพาะช่วงที่กำลังบำรุงรักษา
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveMaintenance()}
+                    disabled={savingMaintenance}
+                    className="mt-5 inline-flex items-center justify-center rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingMaintenance
+                      ? "กำลังบันทึก..."
+                      : "บันทึกสถานะระบบ"}
+                  </button>
                 </div>
               </>
-            )}
+            ) : null}
           </section>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

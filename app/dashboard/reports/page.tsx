@@ -1,36 +1,79 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { getUser } from "@/lib/auth"
 import { backend, normalizeProject } from "@/lib/backend"
-import type { Project } from "@/lib/mockData"
 
-const REPORT_TYPES = [
-  {
-    title: "Weekly Progress Report",
-    description: "สรุปความคืบหน้าตามสัปดาห์เพื่อดูแนวโน้มและปัญหา",
-    metric: "65% avg",
-    color: "#4f8ef7",
-  },
-  {
-    title: "Milestone Report",
-    description: "ติดตาม milestone ที่ใกล้ถึงและที่เลยกำหนด",
-    metric: "4 items",
-    color: "#fbbf24",
-  },
-  {
-    title: "Client Feedback Summary",
-    description: "สรุปคำติชมและปัญหาจากลูกค้าเพื่อจัดลำดับงาน",
-    metric: "3 issues",
-    color: "#34d399",
-  },
-]
+type ProjectStatus = "pending" | "in_progress" | "completed" | "on_hold" | string
+type MilestoneStatus = "upcoming" | "in_progress" | "completed" | "overdue" | string
+type FeedbackStatus = "received" | "in_progress" | "resolved" | string
 
-const RECENT_REPORTS = [
-  { name: "Progress Report - May 2025", project: "BrandCo Redesign", date: "31 May 2025", status: "Ready" },
-  { name: "Milestone Review", project: "ShopNow E-Commerce", date: "28 May 2025", status: "Pending" },
-  { name: "Client Feedback Summary", project: "MediCare Portal", date: "25 May 2025", status: "Ready" },
-]
+type Project = {
+  id: number
+  name: string
+  status: ProjectStatus
+  progress: number
+  createdAt?: string
+  created_at?: string
+  username?: string
+}
+
+type Milestone = {
+  id: number
+  projectId: number
+  project_id?: number
+  projectName?: string
+  project_name?: string
+  title: string
+  status: MilestoneStatus
+  progress: number
+  startDate?: string
+  start_date?: string
+  dueDate?: string
+  end_date?: string
+}
+
+type Feedback = {
+  id: number
+  projectId: number
+  project_id?: number
+  projectName?: string
+  project_name?: string
+  title: string
+  status: FeedbackStatus
+  priority?: string
+  createdAt?: string
+  created_at?: string
+}
+
+type ReportsResponse = {
+  projects?: unknown[]
+  milestones?: unknown[]
+  feedbacks?: unknown[]
+}
+
+const PROJECT_STATUS: Record<string, { label: string; color: string }> = {
+  pending: { label: "รอดำเนินการ", color: "#fbbf24" },
+  in_progress: { label: "กำลังดำเนินการ", color: "#4f8ef7" },
+  completed: { label: "เสร็จสิ้น", color: "#34d399" },
+  on_hold: { label: "พักงาน", color: "#f97316" },
+}
+
+const MILESTONE_STATUS: Record<string, { label: string; color: string }> = {
+  upcoming: { label: "กำลังจะเริ่ม", color: "#94a3b8" },
+  in_progress: { label: "กำลังดำเนินการ", color: "#4f8ef7" },
+  completed: { label: "เสร็จสิ้น", color: "#34d399" },
+  overdue: { label: "เลยกำหนด", color: "#f87171" },
+}
+
+const FEEDBACK_STATUS: Record<string, { label: string; color: string }> = {
+  received: { label: "ส่งถึงแล้ว", color: "#94a3b8" },
+  pending: { label: "ส่งถึงแล้ว", color: "#94a3b8" },
+  in_progress: { label: "กำลังดำเนินการ", color: "#fbbf24" },
+  resolved: { label: "เสร็จสิ้น", color: "#34d399" },
+  completed: { label: "เสร็จสิ้น", color: "#34d399" },
+}
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -39,271 +82,809 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#0b1220",
     color: "#e5e7eb",
     fontFamily: "'Inter', 'Segoe UI', sans-serif",
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
   },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" },
-  titleGroup: { display: "flex", flexDirection: "column", gap: 6, minWidth: 0 },
-  title: { fontSize: 30, fontWeight: 800, color: "#f9fafb", margin: 0, letterSpacing: "-0.03em" },
-  subtitle: { fontSize: 14, color: "#9ca3af", margin: "0px 0px 20px 0px", maxWidth: 620, lineHeight: 1.7 },
-  badge: { fontSize: 12, fontWeight: 600, borderRadius: 999, padding: "8px 14px", border: "1px solid transparent" },
-  summaryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 24 },
-  statCard: {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    padding: 20,
-    minHeight: 110,
+  header: {
     display: "flex",
-    flexDirection: "column" as const,
     justifyContent: "space-between",
-    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.18)",
+    alignItems: "flex-start",
+    gap: 16,
+    flexWrap: "wrap",
+    marginBottom: 22,
   },
-  statTitle: { fontSize: 13, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 10 },
-  statValue: { fontSize: 32, fontWeight: 800, color: "#f9fafb", letterSpacing: "-0.02em" },
-  sectionGrid: { display: "grid", gridTemplateColumns: "1.3fr 0.9fr", gap: 16, alignItems: "start", width: "100%" },
-  card: {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    padding: 22,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-    margin: "20px 0px 0px 0px",
+  title: {
+    margin: 0,
+    color: "#f9fafb",
+    fontSize: 30,
+    fontWeight: 800,
+    letterSpacing: "-0.03em",
   },
-  cardTitle: { fontSize: 16, fontWeight: 700, color: "#f9fafb", marginBottom: 18 },
-  reportItem: {
-    background: "#0f172a",
-    border: "1px solid #1f2937",
-    borderRadius: 14,
-    padding: 16,
+  subtitle: {
+    margin: "7px 0 0",
+    color: "#94a3b8",
+    fontSize: 14,
+    lineHeight: 1.7,
+    maxWidth: 720,
+  },
+  buttonRow: {
     display: "flex",
-    flexDirection: "column" as const,
     gap: 10,
+    flexWrap: "wrap",
   },
-  reportLabel: { fontSize: 15, fontWeight: 700, color: "#f9fafb" },
-  reportMeta: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" as const },
-  reportMetaText: { fontSize: 13, color: "#9ca3af" },
-  summaryText: { fontSize: 13, color: "#cbd5e1", lineHeight: 1.8 },
-  actionCard: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 },
-  actionItem: {
-    background: "#0f172a",
-    border: "1px solid #1f2937",
-    borderRadius: 14,
+  button: {
+    minHeight: 42,
+    padding: "0 15px",
+    borderRadius: 10,
+    border: "1px solid #334155",
+    background: "#111827",
+    color: "#e5e7eb",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  primaryButton: {
+    minHeight: 42,
+    padding: "0 15px",
+    borderRadius: 10,
+    border: "1px solid #4f8ef7",
+    background: "#2563eb",
+    color: "#ffffff",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  filterCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
     padding: 16,
+    marginBottom: 18,
+    borderRadius: 14,
+    border: "1px solid #1f2937",
+    background: "#111827",
   },
-  actionTitle: { fontSize: 14, fontWeight: 700, color: "#f9fafb", marginBottom: 6 },
-  actionText: { fontSize: 13, color: "#9ca3af", lineHeight: 1.6 },
+  select: {
+    minWidth: 260,
+    height: 42,
+    padding: "0 12px",
+    borderRadius: 10,
+    border: "1px solid #334155",
+    background: "#0b1220",
+    color: "#f8fafc",
+    outline: "none",
+  },
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+    gap: 14,
+    marginBottom: 18,
+  },
+  statCard: {
+    borderRadius: 16,
+    border: "1px solid #1f2937",
+    background: "#111827",
+    padding: 18,
+    boxShadow: "0 10px 26px rgba(0,0,0,0.16)",
+  },
+  statTitle: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  statValue: {
+    color: "#f8fafc",
+    fontSize: 30,
+    fontWeight: 800,
+    marginTop: 10,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
+    gap: 18,
+    alignItems: "start",
+  },
+  card: {
+    borderRadius: 16,
+    border: "1px solid #1f2937",
+    background: "#111827",
+    padding: 20,
+    boxShadow: "0 10px 26px rgba(0,0,0,0.14)",
+  },
+  cardTitle: {
+    margin: "0 0 16px",
+    color: "#f8fafc",
+    fontSize: 17,
+    fontWeight: 800,
+  },
+  item: {
+    borderRadius: 13,
+    border: "1px solid #1f2937",
+    background: "#0f172a",
+    padding: 15,
+  },
+  empty: {
+    padding: "30px 20px",
+    textAlign: "center",
+    color: "#64748b",
+    borderRadius: 12,
+    border: "1px dashed #334155",
+  },
+  error: {
+    marginBottom: 16,
+    padding: "12px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(248,113,113,0.4)",
+    background: "rgba(127,29,29,0.22)",
+    color: "#fecaca",
+  },
 }
 
-function ReportsPage() {
-  const [printOrientation, setPrintOrientation] = useState<"portrait" | "landscape">("portrait")
-  const user = getUser()
-  const isAdmin = user?.role === "admin"
-  const [projects, setProjects] = useState<Project[]>([])
-  const [milestones, setMilestones] = useState<any[]>([])
-  const [feedbacks, setFeedbacks] = useState<any[]>([])
-  const [error, setError] = useState("")
+function toNumber(value: unknown, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
 
-  useEffect(() => { backend.reports(isAdmin).then((data: any) => { setProjects((data.projects || []).map(normalizeProject)); setMilestones(data.milestones || []); setFeedbacks(data.feedbacks || []) }).catch((err) => setError(err instanceof Error ? err.message : "โหลดรายงานไม่สำเร็จ")) }, [isAdmin])
-  const totalProjects = projects.length
-  const completedProjects = projects.filter((project) => project.status === "completed").length
-  const overdueMilestones = milestones.filter((milestone) => milestone.status === "overdue").length
-  const avgProgress = totalProjects
-    ? Math.round(projects.reduce((sum, project) => sum + project.progress, 0) / totalProjects)
+function clampProgress(value: unknown) {
+  return Math.min(100, Math.max(0, toNumber(value)))
+}
+
+function normalizeMilestone(row: any): Milestone {
+  return {
+    ...row,
+    id: toNumber(row?.id),
+    projectId: toNumber(row?.projectId ?? row?.project_id),
+    projectName: row?.projectName ?? row?.project_name ?? "",
+    title: String(row?.title ?? "ไม่มีชื่อ Milestone"),
+    status: row?.status ?? "upcoming",
+    progress: clampProgress(row?.progress),
+    startDate: row?.startDate ?? row?.start_date ?? "",
+    dueDate: row?.dueDate ?? row?.end_date ?? "",
+  }
+}
+
+function normalizeFeedback(row: any): Feedback {
+  return {
+    ...row,
+    id: toNumber(row?.id),
+    projectId: toNumber(row?.projectId ?? row?.project_id),
+    projectName: row?.projectName ?? row?.project_name ?? "",
+    title: String(row?.title ?? row?.subject ?? "ไม่มีหัวข้อ"),
+    status: row?.status ?? "received",
+    priority: row?.priority ?? "medium",
+    createdAt: row?.createdAt ?? row?.created_at ?? "",
+  }
+}
+
+function formatDate(value?: string) {
+  if (!value) return "ไม่ระบุ"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "ไม่ระบุ"
+  return date.toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+function isMilestoneOverdue(milestone: Milestone) {
+  if (milestone.status === "completed") return false
+  if (milestone.status === "overdue") return true
+  if (!milestone.dueDate) return false
+
+  const dueDate = new Date(milestone.dueDate)
+  if (Number.isNaN(dueDate.getTime())) return false
+
+  dueDate.setHours(23, 59, 59, 999)
+  return dueDate.getTime() < Date.now()
+}
+
+function escapeCsv(value: unknown) {
+  const text = String(value ?? "")
+  return `"${text.replaceAll('"', '""')}"`
+}
+
+export default function ReportsPage() {
+  const searchParams = useSearchParams()
+  const requestedProjectId = toNumber(searchParams.get("project"))
+  const currentUser = getUser()
+  const isAdmin = currentUser?.role === "admin"
+
+  const [projects, setProjects] = useState<Project[]>([])
+  const [milestones, setMilestones] = useState<Milestone[]>([])
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<number>(requestedProjectId)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [printOrientation, setPrintOrientation] = useState<"portrait" | "landscape">("portrait")
+
+  const loadReports = useCallback(async () => {
+    setLoading(true)
+    setError("")
+
+    try {
+      const response = (await backend.reports(isAdmin)) as ReportsResponse
+
+      const projectRows = Array.isArray(response?.projects) ? response.projects : []
+      const milestoneRows = Array.isArray(response?.milestones) ? response.milestones : []
+      const feedbackRows = Array.isArray(response?.feedbacks) ? response.feedbacks : []
+
+      const normalizedProjects = projectRows
+        .map((row) => normalizeProject(row) as Project)
+        .filter((project) => project.id > 0)
+
+      setProjects(normalizedProjects)
+      setMilestones(milestoneRows.map(normalizeMilestone).filter((item) => item.id > 0))
+      setFeedbacks(feedbackRows.map(normalizeFeedback).filter((item) => item.id > 0))
+
+      if (
+        requestedProjectId > 0 &&
+        !normalizedProjects.some((project) => project.id === requestedProjectId)
+      ) {
+        setSelectedProjectId(0)
+      }
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "ไม่สามารถโหลดข้อมูลรายงานได้"
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [isAdmin, requestedProjectId])
+
+  useEffect(() => {
+    void loadReports()
+  }, [loadReports])
+
+  const filteredProjects = useMemo(() => {
+    if (!selectedProjectId) return projects
+    return projects.filter((project) => project.id === selectedProjectId)
+  }, [projects, selectedProjectId])
+
+  const filteredMilestones = useMemo(() => {
+    if (!selectedProjectId) return milestones
+    return milestones.filter((milestone) => milestone.projectId === selectedProjectId)
+  }, [milestones, selectedProjectId])
+
+  const filteredFeedbacks = useMemo(() => {
+    if (!selectedProjectId) return feedbacks
+    return feedbacks.filter((feedback) => feedback.projectId === selectedProjectId)
+  }, [feedbacks, selectedProjectId])
+
+  const totalProjects = filteredProjects.length
+  const completedProjects = filteredProjects.filter(
+    (project) => project.status === "completed"
+  ).length
+  const activeProjects = filteredProjects.filter(
+    (project) => project.status === "in_progress"
+  ).length
+  const averageProgress = totalProjects
+    ? Math.round(
+        filteredProjects.reduce(
+          (sum, project) => sum + clampProgress(project.progress),
+          0
+        ) / totalProjects
+      )
     : 0
+  const completedMilestones = filteredMilestones.filter(
+    (milestone) => milestone.status === "completed"
+  ).length
+  const overdueMilestones = filteredMilestones.filter(isMilestoneOverdue).length
+  const openFeedbacks = filteredFeedbacks.filter(
+    (feedback) =>
+      !["resolved", "completed"].includes(String(feedback.status).toLowerCase())
+  ).length
+
+  const selectedProject = projects.find(
+    (project) => project.id === selectedProjectId
+  )
 
   function handlePrint(orientation: "portrait" | "landscape") {
     setPrintOrientation(orientation)
-    window.setTimeout(() => window.print(), 100)
+    window.setTimeout(() => window.print(), 80)
+  }
+
+  function downloadCsv() {
+    const projectName = selectedProject?.name ?? "all-projects"
+    const rows: string[][] = [
+      ["Project Report"],
+      ["Scope", selectedProject?.name ?? "ทุกโปรเจกต์"],
+      ["Generated At", new Date().toLocaleString("th-TH")],
+      [],
+      ["Project", "Status", "Progress", "Created At"],
+      ...filteredProjects.map((project) => [
+        project.name,
+        PROJECT_STATUS[project.status]?.label ?? project.status,
+        `${clampProgress(project.progress)}%`,
+        formatDate(project.createdAt ?? project.created_at),
+      ]),
+      [],
+      ["Milestone", "Project", "Status", "Progress", "Due Date"],
+      ...filteredMilestones.map((milestone) => [
+        milestone.title,
+        milestone.projectName ||
+          projects.find((project) => project.id === milestone.projectId)?.name ||
+          "-",
+        isMilestoneOverdue(milestone)
+          ? "เลยกำหนด"
+          : MILESTONE_STATUS[milestone.status]?.label ?? milestone.status,
+        `${clampProgress(milestone.progress)}%`,
+        formatDate(milestone.dueDate),
+      ]),
+      [],
+      ["Feedback", "Project", "Status", "Priority", "Created At"],
+      ...filteredFeedbacks.map((feedback) => [
+        feedback.title,
+        feedback.projectName ||
+          projects.find((project) => project.id === feedback.projectId)?.name ||
+          "-",
+        FEEDBACK_STATUS[feedback.status]?.label ?? feedback.status,
+        feedback.priority ?? "-",
+        formatDate(feedback.createdAt),
+      ]),
+    ]
+
+    const csv = "\uFEFF" + rows.map((row) => row.map(escapeCsv).join(",")).join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `project-report-${projectName
+      .toLowerCase()
+      .replace(/[^a-z0-9ก-๙]+/gi, "-")
+      .replace(/^-|-$/g, "") || "report"}.csv`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
   }
 
   return (
-    <div style={styles.page} className={`report-print-wrapper print-${printOrientation}`}>
-      {error && <div style={{ color: "#f87171" }}>{error}</div>}
+    <main style={styles.page} className="report-page">
       <style>{`
-        @page { size: A4 ${printOrientation}; margin: 16mm; }
-        @media print {
-          .no-print { display: none !important; }
-          .screen-only { display: none !important; }
-          .print-only { display: block !important; }
-          body { background: white !important; color: #111 !important; }
-          .report-print-wrapper { background: white !important; color: #111 !important; padding: 0 !important; }
-          .report-print-wrapper * { box-shadow: none !important; }
-          .report-print-wrapper .print-only * {
-            background: transparent !important;
-            color: #111 !important;
+        @page {
+          size: A4 ${printOrientation};
+          margin: 14mm;
+        }
+
+        @media (max-width: 1050px) {
+          .report-main-grid {
+            grid-template-columns: 1fr !important;
           }
-          .report-print-wrapper .print-only .statCard,
-          .report-print-wrapper .print-only .card,
-          .report-print-wrapper .print-only .reportItem {
-            background: #fff !important;
+        }
+
+        @media (max-width: 700px) {
+          .report-page {
+            padding: 20px 16px !important;
+          }
+
+          .report-filter-select {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+        }
+
+        @media print {
+          body {
+            background: #ffffff !important;
+          }
+
+          .no-print {
+            display: none !important;
+          }
+
+          .report-page {
+            min-height: auto !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #111827 !important;
+          }
+
+          .print-card {
+            break-inside: avoid;
+            background: #ffffff !important;
             border-color: #d1d5db !important;
+            box-shadow: none !important;
+          }
+
+          .print-card * {
+            color: #111827 !important;
+          }
+
+          .print-progress-track {
+            background: #e5e7eb !important;
+          }
+
+          .print-progress-fill {
+            background: #4f8ef7 !important;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
           }
         }
       `}</style>
 
-      <div className="print-only" style={{ display: "none", padding: "0 0 24px" }}>
-        <div style={{ borderBottom: "1px solid #d1d5db", paddingBottom: 16, marginBottom: 20 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>Project Report Summary</h1>
-          <p style={{ marginTop: 8, fontSize: 14, color: "#4b5563" }}>
-            สรุปภาพรวมโปรเจกต์ ณ {new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+      <header style={styles.header}>
+        <div>
+          <h1 style={styles.title}>Reports</h1>
+          <p style={styles.subtitle}>
+            {isAdmin
+              ? "สรุปข้อมูลจริงของทุกโปรเจกต์ Milestone และ Feedback ในระบบ"
+              : "สรุปข้อมูลจริงของโปรเจกต์ที่อยู่ในบัญชีของคุณ"}
           </p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 20 }}>
-          <div className="statCard" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", marginBottom: 12 }}>โปรเจกต์ทั้งหมด</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#111" }}>{totalProjects}</div>
-          </div>
-          <div className="statCard" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", marginBottom: 12 }}>ความคืบหน้าเฉลี่ย</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#111" }}>{avgProgress}%</div>
-          </div>
-          <div className="statCard" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", marginBottom: 12 }}>Milestone เลยกำหนด</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#111" }}>{overdueMilestones}</div>
-          </div>
-          <div className="statCard" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", marginBottom: 12 }}>โปรเจกต์สำเร็จ</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "#111" }}>{completedProjects}</div>
-          </div>
+        <div style={styles.buttonRow} className="no-print">
+          <button
+            type="button"
+            style={styles.button}
+            onClick={() => void loadReports()}
+            disabled={loading}
+          >
+            ↻ {loading ? "กำลังโหลด..." : "รีเฟรช"}
+          </button>
+          <button type="button" style={styles.button} onClick={downloadCsv}>
+            ↓ ดาวน์โหลด CSV
+          </button>
+          <button
+            type="button"
+            style={styles.button}
+            onClick={() => handlePrint("portrait")}
+          >
+            พิมพ์แนวตั้ง
+          </button>
+          <button
+            type="button"
+            style={styles.primaryButton}
+            onClick={() => handlePrint("landscape")}
+          >
+            พิมพ์แนวนอน
+          </button>
         </div>
+      </header>
 
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>รายงานล่าสุด</h2>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #d1d5db" }}>ชื่อรายงาน</th>
-                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #d1d5db" }}>โปรเจกต์</th>
-                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #d1d5db" }}>วันที่</th>
-                <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #d1d5db" }}>สถานะ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {RECENT_REPORTS.map((report) => (
-                <tr key={report.name}>
-                  <td style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>{report.name}</td>
-                  <td style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>{report.project}</td>
-                  <td style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>{report.date}</td>
-                  <td style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>{report.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {error && <div style={styles.error}>{error}</div>}
+
+      <section style={styles.filterCard} className="no-print">
+        <strong style={{ color: "#f8fafc", fontSize: 14 }}>ขอบเขตรายงาน</strong>
+        <select
+          className="report-filter-select"
+          style={styles.select}
+          value={selectedProjectId}
+          onChange={(event) => setSelectedProjectId(toNumber(event.target.value))}
+        >
+          <option value={0}>ทุกโปรเจกต์</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+        <span style={{ color: "#64748b", fontSize: 13 }}>
+          อัปเดตล่าสุด {new Date().toLocaleString("th-TH")}
+        </span>
+      </section>
+
+      {loading ? (
+        <div style={{ ...styles.card, textAlign: "center", color: "#94a3b8" }}>
+          กำลังโหลดข้อมูลรายงาน...
         </div>
-      </div>
+      ) : (
+        <>
+          <section style={styles.summaryGrid}>
+            {[
+              ["โปรเจกต์ทั้งหมด", totalProjects],
+              ["กำลังดำเนินการ", activeProjects],
+              ["ความคืบหน้าเฉลี่ย", `${averageProgress}%`],
+              ["Milestone เสร็จแล้ว", `${completedMilestones}/${filteredMilestones.length}`],
+              ["Milestone เลยกำหนด", overdueMilestones],
+              ["Feedback ที่ยังเปิดอยู่", openFeedbacks],
+            ].map(([label, value]) => (
+              <article key={String(label)} style={styles.statCard} className="print-card">
+                <div style={styles.statTitle}>{label}</div>
+                <div style={styles.statValue}>{value}</div>
+              </article>
+            ))}
+          </section>
 
-      <div className="screen-only">
-        <div style={styles.header}>
-          <div style={styles.titleGroup}>
-            <h1 style={styles.title}>Reports</h1>
-            <p style={styles.subtitle}>
-              {isAdmin
-                ? "แดชบอร์ดรายงานสำหรับทีมและผู้ดูแลระบบ เพื่อดูสถานะโปรเจกต์และ milestone ทุกโปรเจกต์"
-                : "สรุปรายงานโปรเจกต์ของคุณในมุมมองเดียว ทั้งความคืบหน้า milestone และ feedback ที่สำคัญ"}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }} className="no-print">
-            <button
-              type="button"
-              onClick={() => handlePrint("portrait")}
-              style={{
-                borderRadius: 999,
-                border: printOrientation === "portrait" ? "1px solid #4f8ef7" : "1px solid #374151",
-                background: printOrientation === "portrait" ? "#1d4ed8" : "#111827",
-                color: "#fff",
-                padding: "10px 16px",
-                cursor: "pointer",
-              }}
-            >
-              Print Portrait
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePrint("landscape")}
-              style={{
-                borderRadius: 999,
-                border: printOrientation === "landscape" ? "1px solid #4f8ef7" : "1px solid #374151",
-                background: printOrientation === "landscape" ? "#1d4ed8" : "#111827",
-                color: "#fff",
-                padding: "10px 16px",
-                cursor: "pointer",
-              }}
-            >
-              Print Landscape
-            </button>
-          </div>
-        </div>
+          <div style={styles.grid} className="report-main-grid">
+            <section style={{ display: "grid", gap: 18 }}>
+              <article style={styles.card} className="print-card">
+                <h2 style={styles.cardTitle}>
+                  ภาพรวมโปรเจกต์
+                  {selectedProject ? ` — ${selectedProject.name}` : ""}
+                </h2>
 
-        <div style={styles.summaryGrid}>
-          <div style={{ ...styles.statCard, borderTop: "4px solid #4f8ef7" }}>
-            <div style={styles.statTitle}>โปรเจกต์ทั้งหมด</div>
-            <div style={styles.statValue}>{totalProjects}</div>
-          </div>
-          <div style={{ ...styles.statCard, borderTop: "4px solid #a78bfa" }}>
-            <div style={styles.statTitle}>ความคืบหน้าเฉลี่ย</div>
-            <div style={styles.statValue}>{avgProgress}%</div>
-          </div>
-          <div style={{ ...styles.statCard, borderTop: "4px solid #fbbf24" }}>
-            <div style={styles.statTitle}>Milestone เลยกำหนด</div>
-            <div style={styles.statValue}>{overdueMilestones}</div>
-          </div>
-          <div style={{ ...styles.statCard, borderTop: "4px solid #34d399" }}>
-            <div style={styles.statTitle}>โปรเจกต์สำเร็จ</div>
-            <div style={styles.statValue}>{completedProjects}</div>
-          </div>
-        </div>
+                {filteredProjects.length === 0 ? (
+                  <div style={styles.empty}>ยังไม่มีข้อมูลโปรเจกต์</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {filteredProjects.map((project) => {
+                      const status =
+                        PROJECT_STATUS[project.status] ?? {
+                          label: project.status || "ไม่ระบุ",
+                          color: "#94a3b8",
+                        }
 
-        <div style={styles.sectionGrid}>
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>ประเภทรายงานที่ควรใช้</div>
-            <div style={{ display: "grid", gap: 12 }}>
-              {REPORT_TYPES.map((item) => (
-                <div key={item.title} style={{ ...styles.reportItem, borderLeft: `4px solid ${item.color}` }}>
-                  <div style={styles.reportMeta}>
-                    <div style={styles.reportLabel}>{item.title}</div>
-                    <span style={{ ...styles.badge, background: `${item.color}22`, color: item.color, borderColor: `${item.color}44` }}>
-                      {item.metric}
-                    </span>
+                      return (
+                        <div key={project.id} style={styles.item} className="print-card">
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 12,
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{
+                                  color: "#f8fafc",
+                                  fontSize: 15,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {project.name}
+                              </div>
+                              <div
+                                style={{
+                                  color: "#64748b",
+                                  fontSize: 12,
+                                  marginTop: 5,
+                                }}
+                              >
+                                สร้างเมื่อ{" "}
+                                {formatDate(project.createdAt ?? project.created_at)}
+                                {isAdmin && project.username
+                                  ? ` · ลูกค้า ${project.username}`
+                                  : ""}
+                              </div>
+                            </div>
+
+                            <span
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: 999,
+                                border: `1px solid ${status.color}55`,
+                                background: `${status.color}18`,
+                                color: status.color,
+                                fontSize: 12,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {status.label}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginTop: 14,
+                              marginBottom: 7,
+                              color: "#cbd5e1",
+                              fontSize: 12,
+                            }}
+                          >
+                            <span>ความคืบหน้า</span>
+                            <strong>{clampProgress(project.progress)}%</strong>
+                          </div>
+
+                          <div
+                            className="print-progress-track"
+                            style={{
+                              height: 8,
+                              overflow: "hidden",
+                              borderRadius: 999,
+                              background: "#1e293b",
+                            }}
+                          >
+                            <div
+                              className="print-progress-fill"
+                              style={{
+                                width: `${clampProgress(project.progress)}%`,
+                                height: "100%",
+                                borderRadius: 999,
+                                background: status.color,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                  <div style={{ color: "#cbd5e1", fontSize: 13 }}>{item.description}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+                )}
+              </article>
 
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>สรุปรายงานล่าสุด</div>
-            <div style={{ display: "grid", gap: 10 }}>
-              {RECENT_REPORTS.map((report) => (
-                <div key={report.name} style={{ ...styles.reportItem, borderColor: "#1f2937" }}>
-                  <div style={styles.reportMeta}>
-                    <div style={styles.reportLabel}>{report.name}</div>
-                    <span
+              <article style={styles.card} className="print-card">
+                <h2 style={styles.cardTitle}>Milestones</h2>
+
+                {filteredMilestones.length === 0 ? (
+                  <div style={styles.empty}>ยังไม่มี Milestone ในขอบเขตนี้</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {filteredMilestones.map((milestone) => {
+                      const overdue = isMilestoneOverdue(milestone)
+                      const status = overdue
+                        ? { label: "เลยกำหนด", color: "#f87171" }
+                        : MILESTONE_STATUS[milestone.status] ?? {
+                            label: milestone.status || "ไม่ระบุ",
+                            color: "#94a3b8",
+                          }
+                      const projectName =
+                        milestone.projectName ||
+                        projects.find(
+                          (project) => project.id === milestone.projectId
+                        )?.name ||
+                        "ไม่พบโปรเจกต์"
+
+                      return (
+                        <div key={milestone.id} style={styles.item} className="print-card">
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{
+                                  color: "#f8fafc",
+                                  fontSize: 14,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {milestone.title}
+                              </div>
+                              <div
+                                style={{
+                                  color: "#64748b",
+                                  fontSize: 12,
+                                  marginTop: 5,
+                                }}
+                              >
+                                {projectName} · กำหนด {formatDate(milestone.dueDate)}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                color: status.color,
+                                fontSize: 12,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {status.label}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </article>
+            </section>
+
+            <aside style={{ display: "grid", gap: 18 }}>
+              <article style={styles.card} className="print-card">
+                <h2 style={styles.cardTitle}>สรุปสถานะ</h2>
+                <div style={{ display: "grid", gap: 11 }}>
+                  {[
+                    ["โปรเจกต์เสร็จสิ้น", completedProjects, "#34d399"],
+                    ["โปรเจกต์กำลังทำ", activeProjects, "#4f8ef7"],
+                    ["Milestone เลยกำหนด", overdueMilestones, "#f87171"],
+                    ["Feedback ยังไม่เสร็จ", openFeedbacks, "#fbbf24"],
+                  ].map(([label, value, color]) => (
+                    <div
+                      key={String(label)}
                       style={{
-                        ...styles.badge,
-                        background: report.status === "Ready" ? "#34d39922" : "#fbbf2422",
-                        color: report.status === "Ready" ? "#34d399" : "#fbbf24",
-                        borderColor: report.status === "Ready" ? "#34d39944" : "#fbbf2444",
+                        ...styles.item,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
                       }}
                     >
-                      {report.status}
-                    </span>
-                  </div>
-                  <div style={styles.reportMeta}>
-                    <span style={styles.reportMetaText}>{report.project}</span>
-                    <span style={styles.reportMetaText}>{report.date}</span>
-                  </div>
+                      <span style={{ color: "#cbd5e1", fontSize: 13 }}>{label}</span>
+                      <strong style={{ color: String(color), fontSize: 18 }}>
+                        {value}
+                      </strong>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </article>
+
+              <article style={styles.card} className="print-card">
+                <h2 style={styles.cardTitle}>Feedback ล่าสุด</h2>
+
+                {filteredFeedbacks.length === 0 ? (
+                  <div style={styles.empty}>ยังไม่มี Feedback ในขอบเขตนี้</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {filteredFeedbacks.slice(0, 8).map((feedback) => {
+                      const status =
+                        FEEDBACK_STATUS[feedback.status] ?? {
+                          label: feedback.status || "ไม่ระบุ",
+                          color: "#94a3b8",
+                        }
+                      const projectName =
+                        feedback.projectName ||
+                        projects.find(
+                          (project) => project.id === feedback.projectId
+                        )?.name ||
+                        "ไม่พบโปรเจกต์"
+
+                      return (
+                        <div key={feedback.id} style={styles.item} className="print-card">
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              alignItems: "flex-start",
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  color: "#f8fafc",
+                                  fontWeight: 800,
+                                  fontSize: 13,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {feedback.title}
+                              </div>
+                              <div
+                                style={{
+                                  color: "#64748b",
+                                  fontSize: 11,
+                                  marginTop: 5,
+                                }}
+                              >
+                                {projectName} · {formatDate(feedback.createdAt)}
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                flexShrink: 0,
+                                color: status.color,
+                                fontSize: 11,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {status.label}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </article>
+
+              <article style={styles.card} className="print-card">
+                <h2 style={styles.cardTitle}>ข้อมูลรายงาน</h2>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#94a3b8",
+                    fontSize: 13,
+                    lineHeight: 1.8,
+                  }}
+                >
+                  หน้านี้คำนวณจาก Projects, Milestones และ Feedback ที่ Backend
+                  ส่งมาโดยตรง ไม่มีรายงานตัวอย่างหรือข้อมูลจาก Mock Data
+                </p>
+              </article>
+            </aside>
           </div>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </main>
   )
 }
-
-export default ReportsPage

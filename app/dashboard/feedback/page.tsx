@@ -1,115 +1,251 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { MessageSquare, Plus, Send } from "lucide-react"
-import {
-  FEEDBACK_STATUS_CONFIG, FEEDBACK_PRIORITY_CONFIG,
-  type Feedback, type FeedbackStatus, type FeedbackPriority, type FeedbackComment,
-  type Project,
-} from "@/lib/mockData"
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import { useSearchParams } from "next/navigation"
+import { MessageSquare, Plus, RefreshCw, Send } from "lucide-react"
 import { useNotifications } from "@/lib/notificationStore"
 import { backend, normalizeProject } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
 
+type UserRole = "admin" | "customer"
+type FeedbackStatus = "sent" | "in_progress" | "resolved"
+type FeedbackPriority = "low" | "medium" | "high"
+
+type Project = {
+  id: number
+  name: string
+  ownerId?: number
+}
+
+type FeedbackComment = {
+  id: number
+  authorId: number
+  authorName: string
+  authorRole: UserRole
+  message: string
+  createdAt: Date
+}
+
+type Feedback = {
+  id: number
+  title: string
+  description: string
+  projectId: number
+  priority: FeedbackPriority
+  authorId: number
+  authorName: string
+  status: FeedbackStatus
+  createdAt: Date
+  updatedAt: Date
+  isRead: boolean
+  comments: FeedbackComment[]
+}
+
+const FEEDBACK_STATUS_CONFIG: Record<FeedbackStatus, { label: string; color: string }> = {
+  sent: { label: "ส่งถึงแล้ว", color: "#60a5fa" },
+  in_progress: { label: "กำลังดำเนินการ", color: "#f59e0b" },
+  resolved: { label: "เสร็จสิ้น", color: "#34d399" },
+}
+
+const FEEDBACK_PRIORITY_CONFIG: Record<FeedbackPriority, { label: string; color: string }> = {
+  low: { label: "ต่ำ", color: "#9ca3af" },
+  medium: { label: "กลาง", color: "#f59e0b" },
+  high: { label: "สูง", color: "#f87171" },
+}
+
 export default function FeedbackPage() {
+  const searchParams = useSearchParams()
+  const requestedProjectId = Number(searchParams.get("project"))
   const user = getUser() || { id: 0, username: "", role: "customer" as const }
   const isAdmin = user.role === "admin"
   const { addNotif } = useNotifications()
+
   const [projects, setProjects] = useState<Project[]>([])
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<number | "all">(
+    Number.isFinite(requestedProjectId) && requestedProjectId > 0 ? requestedProjectId : "all",
+  )
   const [showCreate, setShowCreate] = useState(false)
   const [filterStatus, setFilterStatus] = useState<FeedbackStatus | "all">("all")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [replying, setReplying] = useState(false)
+  const [changingStatus, setChangingStatus] = useState(false)
 
-  const selected = feedbacks.find((f) => f.id === selectedId) ?? null
-  const filtered = feedbacks.filter((f) => filterStatus === "all" || f.status === filterStatus)
-  const unreadCount = isAdmin ? feedbacks.filter((f) => !f.isRead).length : 0
+  const selected = feedbacks.find((feedback) => feedback.id === selectedId) ?? null
 
-  async function loadFeedbacks() {
+  const filtered = useMemo(() => {
+    return feedbacks.filter((feedback) => {
+      const matchesStatus = filterStatus === "all" || feedback.status === filterStatus
+      const matchesProject = selectedProjectId === "all" || feedback.projectId === selectedProjectId
+      return matchesStatus && matchesProject
+    })
+  }, [feedbacks, filterStatus, selectedProjectId])
+
+  const unreadCount = isAdmin ? feedbacks.filter((feedback) => !feedback.isRead).length : 0
+
+  const loadFeedbacks = useCallback(async () => {
+    setLoading(true)
     setError("")
+
     try {
       const projectRows = await backend.projects(isAdmin)
-      const nextProjects = projectRows.map((row) => normalizeProject(row) as Project)
+      const nextProjects = projectRows.map((row: any) => normalizeProject(row) as Project)
       setProjects(nextProjects)
+
+      if (
+        selectedProjectId !== "all" &&
+        !nextProjects.some((project) => project.id === selectedProjectId)
+      ) {
+        setSelectedProjectId("all")
+      }
 
       const rows = isAdmin
         ? await backend.allFeedbacks()
-        : (await Promise.all(nextProjects.map((project) => backend.feedbacks(project.id)))).flat()
+        : (
+            await Promise.all(
+              nextProjects.map((project) => backend.feedbacks(project.id).catch(() => [])),
+            )
+          ).flat()
 
-      const nextFeedbacks = await Promise.all(rows.map(async (row: any) => {
-        const comments = await backend.feedbackReplies(Number(row.id)).catch(() => [])
-        return normalizeFeedback(row, comments, user)
-      }))
+      const nextFeedbacks = await Promise.all(
+        rows.map(async (row: any) => {
+          const comments = await backend.feedbackReplies(Number(row.id)).catch(() => [])
+          return normalizeFeedback(row, comments, user)
+        }),
+      )
+
+      nextFeedbacks.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
       setFeedbacks(nextFeedbacks)
+
+      setSelectedId((currentId) => {
+        if (currentId && nextFeedbacks.some((feedback) => feedback.id === currentId)) {
+          return currentId
+        }
+
+        const firstMatching = nextFeedbacks.find((feedback) =>
+          selectedProjectId === "all" ? true : feedback.projectId === selectedProjectId,
+        )
+        return firstMatching?.id ?? null
+      })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ไม่สามารถโหลด feedback ได้")
+      setError(err instanceof Error ? err.message : "ไม่สามารถโหลด Feedback ได้")
     } finally {
       setLoading(false)
     }
-  }
+  }, [isAdmin, selectedProjectId, user.id, user.role, user.username])
 
   useEffect(() => {
-    loadFeedbacks()
-  }, [isAdmin])
+    void loadFeedbacks()
+  }, [loadFeedbacks])
+
+  useEffect(() => {
+    if (Number.isFinite(requestedProjectId) && requestedProjectId > 0) {
+      setSelectedProjectId(requestedProjectId)
+    }
+  }, [requestedProjectId])
 
   function handleSelect(id: number) {
     setSelectedId(id)
+
     if (isAdmin) {
-      setFeedbacks((prev) => prev.map((f) => f.id === id ? { ...f, isRead: true } : f))
+      setFeedbacks((previous) =>
+        previous.map((feedback) =>
+          feedback.id === id ? { ...feedback, isRead: true } : feedback,
+        ),
+      )
     }
   }
 
-  async function handleCreate(data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) {
+  async function handleCreate(data: {
+    title: string
+    description: string
+    projectId: number
+    priority: FeedbackPriority
+  }) {
+    if (creating) return
+
+    setCreating(true)
     setError("")
+
     try {
       await backend.createFeedback(data.projectId, {
-        title: data.title,
-        message: data.description,
+        title: data.title.trim(),
+        message: data.description.trim(),
         priority: data.priority,
       })
-      const proj = projects.find((p) => p.id === data.projectId)
+
+      const project = projects.find((item) => item.id === data.projectId)
       addNotif({
         type: "feedback",
         title: "มี Feedback ใหม่",
-        message: `${user.username} ส่ง feedback "${data.title}" ใน ${proj?.name || "โปรเจค"}`,
+        message: `${user.username || "ผู้ใช้งาน"} ส่ง feedback “${data.title.trim()}” ใน ${project?.name || "โปรเจค"}`,
         forUserId: "all",
       })
+
+      setSelectedProjectId(data.projectId)
       setShowCreate(false)
       await loadFeedbacks()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ส่ง feedback ไม่สำเร็จ")
+      setError(err instanceof Error ? err.message : "ส่ง Feedback ไม่สำเร็จ")
+    } finally {
+      setCreating(false)
     }
   }
 
   async function handleStatusChange(feedbackId: number, status: FeedbackStatus) {
+    if (changingStatus) return
+
+    setChangingStatus(true)
     setError("")
+
     try {
       await backend.updateFeedbackStatus(feedbackId, status)
-      setFeedbacks((prev) => prev.map((item) => item.id === feedbackId ? { ...item, status, updatedAt: new Date() } : item))
+      setFeedbacks((previous) =>
+        previous.map((item) =>
+          item.id === feedbackId ? { ...item, status, updatedAt: new Date() } : item,
+        ),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "เปลี่ยนสถานะไม่สำเร็จ")
+    } finally {
+      setChangingStatus(false)
     }
   }
 
   async function handleComment(feedbackId: number, message: string) {
+    if (replying) return
+
+    setReplying(true)
     setError("")
+
     try {
-      await backend.createFeedbackReply(feedbackId, message)
+      await backend.createFeedbackReply(feedbackId, message.trim())
       const comments = await backend.feedbackReplies(feedbackId)
-      setFeedbacks((prev) => prev.map((item) => item.id === feedbackId
-        ? { ...item, comments: comments.map((row: any) => normalizeReply(row, user)), updatedAt: new Date() }
-        : item
-      ))
+
+      setFeedbacks((previous) =>
+        previous.map((item) =>
+          item.id === feedbackId
+            ? {
+                ...item,
+                comments: comments.map((row: any) => normalizeReply(row, user)),
+                updatedAt: new Date(),
+              }
+            : item,
+        ),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "ส่งข้อความไม่สำเร็จ")
+      throw err
+    } finally {
+      setReplying(false)
     }
   }
 
   return (
     <div style={S.page}>
-      {/* Header */}
       <div style={S.header}>
         <div>
           <h1 style={S.title}>Feedback Center</h1>
@@ -119,112 +255,176 @@ export default function FeedbackPage() {
               : `${feedbacks.length} รายการของคุณ`}
           </p>
         </div>
-        <button onClick={() => setShowCreate(true)} style={S.addBtn}>
-          <Plus size={15} /> ส่ง Feedback
-        </button>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => void loadFeedbacks()} disabled={loading} style={S.secondaryBtn}>
+            <RefreshCw size={15} /> รีเฟรช
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            disabled={projects.length === 0}
+            style={{ ...S.addBtn, opacity: projects.length === 0 ? 0.5 : 1 }}
+          >
+            <Plus size={15} /> ส่ง Feedback
+          </button>
+        </div>
       </div>
 
-      {/* Role badge */}
       <div style={{ marginBottom: 20 }}>
-        <span style={{
-          ...S.roleBadge,
-          background: isAdmin ? "#4f8ef722" : "#34d39922",
-          color: isAdmin ? "#4f8ef7" : "#34d399",
-          border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}`,
-        }}>
-          {isAdmin ? "👑 Admin — เห็นและจัดการ feedback ทั้งหมด เปลี่ยนสถานะได้" : "👤 Customer — ส่งและติดตาม feedback ของคุณ"}
+        <span
+          style={{
+            ...S.roleBadge,
+            background: isAdmin ? "#4f8ef722" : "#34d39922",
+            color: isAdmin ? "#4f8ef7" : "#34d399",
+            border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}`,
+          }}
+        >
+          {isAdmin
+            ? "👑 Admin — เห็นและจัดการ Feedback ทั้งหมด เปลี่ยนสถานะได้"
+            : "👤 Customer — ส่งและติดตาม Feedback ของคุณ"}
         </span>
       </div>
 
-      {error && <div style={{ color: "#f87171", marginBottom: 14 }}>{error}</div>}
-      {loading && <div style={{ color: "#6b7280", marginBottom: 14 }}>กำลังโหลด feedback...</div>}
+      {error && <div style={S.errorBox}>{error}</div>}
 
-      {/* 2-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 14, height: "calc(100vh - 230px)" }}>
-
-        {/* Left panel */}
-        <div style={S.listPanel}>
-          {/* Filter tabs */}
-          <div style={{ display: "flex", gap: 2, padding: "10px 10px 0", flexWrap: "wrap" }}>
-            {(["all", "sent", "in_progress", "resolved"] as const).map((s) => (
-              <button key={s} onClick={() => setFilterStatus(s)}
-                style={{ ...S.tabBtn, background: filterStatus === s ? "#1f2937" : "transparent", color: filterStatus === s ? "#f9fafb" : "#6b7280" }}>
-                {s === "all" ? "ทั้งหมด" : FEEDBACK_STATUS_CONFIG[s].label}
-              </button>
-            ))}
-          </div>
-
-          {/* List */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 8 }}>
-            {filtered.length === 0 ? (
-              <div style={S.empty}>ไม่มี feedback</div>
-            ) : filtered.map((f) => {
-              const { color } = FEEDBACK_STATUS_CONFIG[f.status]
-              const { color: pColor } = FEEDBACK_PRIORITY_CONFIG[f.priority]
-              const proj = projects.find((p) => p.id === f.projectId)
-              const isSelected = selectedId === f.id
-              return (
-                <div key={f.id} onClick={() => handleSelect(f.id)}
-                  style={{
-                    ...S.feedbackItem,
-                    background: isSelected ? "#1e3a5f" : "#0d1117",
-                    borderColor: isSelected ? "#4f8ef7" : "#1f2937",
-                    borderLeftColor: color,
-                  }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: isAdmin && !f.isRead ? 700 : 500, color: "#f9fafb", flex: 1, lineHeight: 1.4 }}>
-                      {f.title}
-                    </span>
-                    {isAdmin && !f.isRead && <span style={S.unreadDot} />}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>{proj?.name}</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-                    <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>
-                      {FEEDBACK_STATUS_CONFIG[f.status].label}
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ ...S.badge, background: pColor + "22", color: pColor, border: `1px solid ${pColor}44` }}>
-                        {FEEDBACK_PRIORITY_CONFIG[f.priority].label}
-                      </span>
-                      {f.comments.length > 0 && (
-                        <span style={{ fontSize: 10, color: "#4b5563" }}>💬 {f.comments.length}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Right panel */}
-        <div style={S.detailPanel}>
-          {!selected ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
-              <MessageSquare size={40} color="#1f2937" />
-              <div style={{ fontSize: 13, color: "#374151" }}>เลือก feedback เพื่อดูรายละเอียด</div>
-            </div>
-          ) : (
-            <FeedbackDetail
-              feedback={selected}
-              isAdmin={isAdmin}
-              currentUserId={user.id}
-              currentUsername={user.username}
-              currentRole={user.role}
-              projectName={projects.find((project) => project.id === selected.projectId)?.name || "โปรเจค"}
-              onStatusChange={handleStatusChange}
-              onComment={handleComment}
-            />
-          )}
-        </div>
+      <div style={S.filterRow}>
+        <select
+          value={selectedProjectId}
+          onChange={(event) => {
+            const value = event.target.value
+            setSelectedProjectId(value === "all" ? "all" : Number(value))
+            setSelectedId(null)
+          }}
+          style={{ ...S.input, maxWidth: 280 }}
+        >
+          <option value="all">ทุกโปรเจค</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {loading ? (
+        <div style={S.loadingBox}>กำลังโหลด Feedback...</div>
+      ) : (
+        <div style={S.contentGrid}>
+          <div style={S.listPanel}>
+            <div style={{ display: "flex", gap: 2, padding: "10px 10px 0", flexWrap: "wrap" }}>
+              {(["all", "sent", "in_progress", "resolved"] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilterStatus(status)}
+                  style={{
+                    ...S.tabBtn,
+                    background: filterStatus === status ? "#1f2937" : "transparent",
+                    color: filterStatus === status ? "#f9fafb" : "#6b7280",
+                  }}
+                >
+                  {status === "all" ? "ทั้งหมด" : FEEDBACK_STATUS_CONFIG[status].label}
+                </button>
+              ))}
+            </div>
+
+            <div style={S.listBody}>
+              {filtered.length === 0 ? (
+                <div style={S.empty}>ไม่มี Feedback ตามตัวกรองนี้</div>
+              ) : (
+                filtered.map((feedback) => {
+                  const { color } = FEEDBACK_STATUS_CONFIG[feedback.status]
+                  const { color: priorityColor } = FEEDBACK_PRIORITY_CONFIG[feedback.priority]
+                  const project = projects.find((item) => item.id === feedback.projectId)
+                  const isSelected = selectedId === feedback.id
+
+                  return (
+                    <button
+                      type="button"
+                      key={feedback.id}
+                      onClick={() => handleSelect(feedback.id)}
+                      style={{
+                        ...S.feedbackItem,
+                        background: isSelected ? "#1e3a5f" : "#0d1117",
+                        borderColor: isSelected ? "#4f8ef7" : "#1f2937",
+                        borderLeftColor: color,
+                        textAlign: "left",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: isAdmin && !feedback.isRead ? 700 : 500,
+                            color: "#f9fafb",
+                            flex: 1,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {feedback.title || "ไม่มีหัวข้อ"}
+                        </span>
+                        {isAdmin && !feedback.isRead && <span style={S.unreadDot} />}
+                      </div>
+
+                      <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>
+                        {project?.name || "ไม่พบโปรเจค"}
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                        <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>
+                          {FEEDBACK_STATUS_CONFIG[feedback.status].label}
+                        </span>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span
+                            style={{
+                              ...S.badge,
+                              background: priorityColor + "22",
+                              color: priorityColor,
+                              border: `1px solid ${priorityColor}44`,
+                            }}
+                          >
+                            {FEEDBACK_PRIORITY_CONFIG[feedback.priority].label}
+                          </span>
+                          {feedback.comments.length > 0 && (
+                            <span style={{ fontSize: 10, color: "#4b5563" }}>💬 {feedback.comments.length}</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          <div style={S.detailPanel}>
+            {!selected ? (
+              <div style={S.noSelection}>
+                <MessageSquare size={40} color="#1f2937" />
+                <div style={{ fontSize: 13, color: "#374151" }}>เลือก Feedback เพื่อดูรายละเอียด</div>
+              </div>
+            ) : (
+              <FeedbackDetail
+                feedback={selected}
+                isAdmin={isAdmin}
+                currentUserId={user.id}
+                projectName={projects.find((project) => project.id === selected.projectId)?.name || "ไม่พบโปรเจค"}
+                changingStatus={changingStatus}
+                replying={replying}
+                onStatusChange={handleStatusChange}
+                onComment={handleComment}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {showCreate && (
         <CreateModal
-          userId={user.id}
-          isAdmin={isAdmin}
           projects={projects}
-          onClose={() => setShowCreate(false)}
+          initialProjectId={selectedProjectId === "all" ? undefined : selectedProjectId}
+          submitting={creating}
+          onClose={() => !creating && setShowCreate(false)}
           onCreate={handleCreate}
         />
       )}
@@ -232,99 +432,154 @@ export default function FeedbackPage() {
   )
 }
 
-// ─── Feedback Detail ──────────────────────────────────────────────────────────
-
-function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, currentRole, projectName, onStatusChange, onComment }: {
+function FeedbackDetail({
+  feedback,
+  isAdmin,
+  currentUserId,
+  projectName,
+  changingStatus,
+  replying,
+  onStatusChange,
+  onComment,
+}: {
   feedback: Feedback
   isAdmin: boolean
   currentUserId: number
-  currentUsername: string
-  currentRole: "admin" | "customer"
   projectName: string
+  changingStatus: boolean
+  replying: boolean
   onStatusChange: (id: number, status: FeedbackStatus) => void | Promise<void>
   onComment: (id: number, message: string) => void | Promise<void>
 }) {
   const [newComment, setNewComment] = useState("")
-  const { color: sColor, label: sLabel } = FEEDBACK_STATUS_CONFIG[f.status]
-  const { color: pColor, label: pLabel } = FEEDBACK_PRIORITY_CONFIG[f.priority]
+  const { color: statusColor, label: statusLabel } = FEEDBACK_STATUS_CONFIG[feedback.status]
+  const { color: priorityColor, label: priorityLabel } = FEEDBACK_PRIORITY_CONFIG[feedback.priority]
 
-  function submit() {
-    if (!newComment.trim()) return
-    onComment(f.id, newComment.trim())
-    setNewComment("")
+  async function submit() {
+    const message = newComment.trim()
+    if (!message || replying) return
+
+    try {
+      await onComment(feedback.id, message)
+      setNewComment("")
+    } catch {
+      // ข้อผิดพลาดถูกแสดงที่หน้าหลักแล้ว จึงเก็บข้อความไว้ให้ผู้ใช้ลองส่งใหม่
+    }
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Detail header */}
       <div style={{ padding: "20px 24px", borderBottom: "1px solid #1f2937", flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "#f9fafb", marginBottom: 4 }}>{f.title}</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#f9fafb", marginBottom: 4 }}>
+              {feedback.title || "ไม่มีหัวข้อ"}
+            </div>
             <div style={{ fontSize: 12, color: "#6b7280" }}>
-              โดย {f.authorName} · {projectName} · {f.createdAt.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+              โดย {feedback.authorName} · {projectName} · {formatDate(feedback.createdAt)}
             </div>
           </div>
+
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-            <span style={{ ...S.badge, background: pColor + "22", color: pColor, border: `1px solid ${pColor}44` }}>
-              ⚡ {pLabel}
+            <span
+              style={{
+                ...S.badge,
+                background: priorityColor + "22",
+                color: priorityColor,
+                border: `1px solid ${priorityColor}44`,
+              }}
+            >
+              ⚡ {priorityLabel}
             </span>
+
             {isAdmin ? (
-              <select value={f.status}
-                onChange={(e) => onStatusChange(f.id, e.target.value as FeedbackStatus)}
-                style={{ background: sColor + "22", color: sColor, border: `1px solid ${sColor}44`, borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", outline: "none" }}>
+              <select
+                value={feedback.status}
+                disabled={changingStatus}
+                onChange={(event) => void onStatusChange(feedback.id, event.target.value as FeedbackStatus)}
+                style={{
+                  background: statusColor + "22",
+                  color: statusColor,
+                  border: `1px solid ${statusColor}44`,
+                  borderRadius: 6,
+                  padding: "5px 10px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: changingStatus ? "wait" : "pointer",
+                  outline: "none",
+                }}
+              >
                 <option value="sent">ส่งถึงแล้ว</option>
                 <option value="in_progress">กำลังดำเนินการ</option>
                 <option value="resolved">เสร็จสิ้น</option>
               </select>
             ) : (
-              <span style={{ ...S.badge, background: sColor + "22", color: sColor, border: `1px solid ${sColor}44` }}>
-                {sLabel}
+              <span
+                style={{
+                  ...S.badge,
+                  background: statusColor + "22",
+                  color: statusColor,
+                  border: `1px solid ${statusColor}44`,
+                }}
+              >
+                {statusLabel}
               </span>
             )}
           </div>
         </div>
-        <p style={{ fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: 0, background: "#0d1117", borderRadius: 8, padding: "12px 14px" }}>
-          {f.description}
-        </p>
+
+        <p style={S.descriptionBox}>{feedback.description || "ไม่มีรายละเอียด"}</p>
       </div>
 
-      {/* Comments */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-        {f.comments.length === 0 && (
-          <div style={{ color: "#374151", fontSize: 13, textAlign: "center", padding: "32px 0", fontStyle: "italic" }}>
-            ยังไม่มีความคิดเห็น — เริ่มการสนทนาได้เลย
-          </div>
+      <div style={S.commentsBody}>
+        {feedback.comments.length === 0 && (
+          <div style={S.noComments}>ยังไม่มีความคิดเห็น — เริ่มการสนทนาได้เลย</div>
         )}
-        {f.comments.map((c) => {
-          const isMe = c.authorId === currentUserId
+
+        {feedback.comments.map((comment) => {
+          const isMe = comment.authorId === currentUserId
+          const initial = comment.authorName.trim().charAt(0).toUpperCase() || "?"
+
           return (
-            <div key={c.id} style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 10, alignItems: "flex-start" }}>
-              {/* Avatar */}
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                background: c.authorRole === "admin" ? "#4f8ef722" : "#34d39922",
-                color: c.authorRole === "admin" ? "#4f8ef7" : "#34d399",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: 700, border: `1px solid ${c.authorRole === "admin" ? "#4f8ef744" : "#34d39944"}`,
-              }}>
-                {c.authorName[0].toUpperCase()}
+            <div
+              key={comment.id}
+              style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 10, alignItems: "flex-start" }}
+            >
+              <div
+                style={{
+                  ...S.avatar,
+                  background: comment.authorRole === "admin" ? "#4f8ef722" : "#34d39922",
+                  color: comment.authorRole === "admin" ? "#4f8ef7" : "#34d399",
+                  border: `1px solid ${comment.authorRole === "admin" ? "#4f8ef744" : "#34d39944"}`,
+                }}
+              >
+                {initial}
               </div>
-              {/* Bubble */}
+
               <div style={{ maxWidth: "68%" }}>
-                <div style={{
-                  background: isMe ? "#1e3a5f" : "#1f2937",
-                  borderRadius: isMe ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
-                  padding: "10px 14px",
-                  border: `1px solid ${isMe ? "#2d5a9a" : "#374151"}`,
-                }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: c.authorRole === "admin" ? "#4f8ef7" : "#34d399", marginBottom: 5 }}>
-                    {c.authorName}{c.authorRole === "admin" ? " · Admin" : ""}
+                <div
+                  style={{
+                    background: isMe ? "#1e3a5f" : "#1f2937",
+                    borderRadius: isMe ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
+                    padding: "10px 14px",
+                    border: `1px solid ${isMe ? "#2d5a9a" : "#374151"}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: comment.authorRole === "admin" ? "#4f8ef7" : "#34d399",
+                      marginBottom: 5,
+                    }}
+                  >
+                    {comment.authorName}
+                    {comment.authorRole === "admin" ? " · Admin" : ""}
                   </div>
-                  <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.6 }}>{c.message}</div>
+                  <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.6 }}>{comment.message}</div>
                 </div>
                 <div style={{ fontSize: 10, color: "#374151", marginTop: 3, textAlign: isMe ? "right" : "left" }}>
-                  {c.createdAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                  {formatTime(comment.createdAt)}
                 </div>
               </div>
             </div>
@@ -332,16 +587,26 @@ function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, 
         })}
       </div>
 
-      {/* Input */}
-      <div style={{ padding: "12px 24px", borderTop: "1px solid #1f2937", display: "flex", gap: 10, flexShrink: 0 }}>
+      <div style={S.commentInputRow}>
         <input
           value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
+          disabled={replying}
+          onChange={(event) => setNewComment(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault()
+              void submit()
+            }
+          }}
           placeholder={isAdmin ? "ตอบกลับลูกค้า..." : "พิมพ์ความคิดเห็น..."}
           style={{ ...S.input, flex: 1 }}
         />
-        <button onClick={submit} style={S.sendBtn} title="ส่ง">
+        <button
+          onClick={() => void submit()}
+          disabled={!newComment.trim() || replying}
+          style={{ ...S.sendBtn, opacity: !newComment.trim() || replying ? 0.5 : 1 }}
+          title="ส่ง"
+        >
           <Send size={15} />
         </button>
       </div>
@@ -349,58 +614,114 @@ function FeedbackDetail({ feedback: f, isAdmin, currentUserId, currentUsername, 
   )
 }
 
-// ─── Create Modal ─────────────────────────────────────────────────────────────
-
-function CreateModal({ userId, isAdmin, projects, onClose, onCreate }: {
-  userId: number
-  isAdmin: boolean
+function CreateModal({
+  projects,
+  initialProjectId,
+  submitting,
+  onClose,
+  onCreate,
+}: {
   projects: Project[]
+  initialProjectId?: number
+  submitting: boolean
   onClose: () => void
-  onCreate: (data: { title: string; description: string; projectId: number; priority: FeedbackPriority }) => void | Promise<void>
+  onCreate: (data: {
+    title: string
+    description: string
+    projectId: number
+    priority: FeedbackPriority
+  }) => void | Promise<void>
 }) {
-  const myProjects = projects.filter((p) => isAdmin || p.ownerId === userId)
+  const availableProjects = projects
+  const firstProjectId =
+    availableProjects.find((project) => project.id === initialProjectId)?.id ?? availableProjects[0]?.id ?? 0
+
   const [form, setForm] = useState({
     title: "",
     description: "",
-    projectId: myProjects[0]?.id ?? 0,
+    projectId: firstProjectId,
     priority: "medium" as FeedbackPriority,
   })
-  const canSubmit = form.title.trim() && form.description.trim()
+
+  const canSubmit =
+    Boolean(form.title.trim()) &&
+    Boolean(form.description.trim()) &&
+    form.projectId > 0 &&
+    !submitting
 
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+      <div style={S.modal} onClick={(event) => event.stopPropagation()}>
         <div style={S.modalHeader}>
           <div style={S.modalTitle}>ส่ง Feedback ใหม่</div>
-          <button onClick={onClose} style={S.closeBtn}>✕</button>
+          <button onClick={onClose} disabled={submitting} style={S.closeBtn}>✕</button>
         </div>
+
         <div style={S.modalBody}>
           <Field label="หัวข้อ">
-            <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="สรุปปัญหาหรือข้อเสนอแนะ" style={S.input} />
+            <input
+              value={form.title}
+              disabled={submitting}
+              onChange={(event) => setForm((previous) => ({ ...previous, title: event.target.value }))}
+              placeholder="สรุปปัญหาหรือข้อเสนอแนะ"
+              style={S.input}
+            />
           </Field>
+
           <Field label="รายละเอียด">
-            <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              rows={4} placeholder="อธิบายให้ละเอียดขึ้น..." style={{ ...S.input, resize: "vertical" }} />
+            <textarea
+              value={form.description}
+              disabled={submitting}
+              onChange={(event) => setForm((previous) => ({ ...previous, description: event.target.value }))}
+              rows={4}
+              placeholder="อธิบายให้ละเอียดขึ้น..."
+              style={{ ...S.input, resize: "vertical" }}
+            />
           </Field>
+
           <Field label="โปรเจค">
-            <select value={form.projectId} onChange={(e) => setForm((f) => ({ ...f, projectId: Number(e.target.value) }))} style={S.input}>
-              {myProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            <select
+              value={form.projectId}
+              disabled={submitting || availableProjects.length === 0}
+              onChange={(event) => setForm((previous) => ({ ...previous, projectId: Number(event.target.value) }))}
+              style={S.input}
+            >
+              {availableProjects.length === 0 ? (
+                <option value={0}>ไม่มีโปรเจคที่เลือกได้</option>
+              ) : (
+                availableProjects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))
+              )}
             </select>
           </Field>
+
           <Field label="ระดับความสำคัญ">
-            <select value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as FeedbackPriority }))} style={S.input}>
+            <select
+              value={form.priority}
+              disabled={submitting}
+              onChange={(event) =>
+                setForm((previous) => ({ ...previous, priority: event.target.value as FeedbackPriority }))
+              }
+              style={S.input}
+            >
               <option value="low">ต่ำ — ข้อเสนอแนะทั่วไป</option>
               <option value="medium">กลาง — ส่งผลต่อการใช้งาน</option>
               <option value="high">สูง — ต้องแก้ไขเร่งด่วน</option>
             </select>
           </Field>
         </div>
+
         <div style={{ ...S.modalFooter, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={S.cancelBtn}>ยกเลิก</button>
-          <button onClick={() => canSubmit && onCreate(form)}
-            style={{ ...S.saveBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" }}>
-            ส่ง Feedback
+          <button onClick={onClose} disabled={submitting} style={S.cancelBtn}>ยกเลิก</button>
+          <button
+            onClick={() => canSubmit && void onCreate(form)}
+            disabled={!canSubmit}
+            style={{ ...S.saveBtn, opacity: canSubmit ? 1 : 0.5, cursor: canSubmit ? "pointer" : "not-allowed" }}
+          >
+            {submitting ? "กำลังส่ง..." : "ส่ง Feedback"}
           </button>
         </div>
       </div>
@@ -408,7 +729,7 @@ function CreateModal({ userId, isAdmin, projects, onClose, onCreate }: {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
       <label style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
@@ -417,51 +738,103 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function normalizeFeedback(row: any, replies: any[], currentUser: { id: number; username: string; role: "admin" | "customer" }): Feedback {
+function normalizeFeedback(
+  row: any,
+  replies: any[],
+  currentUser: { id: number; username: string; role: UserRole },
+): Feedback {
   return {
     id: Number(row.id),
-    title: row.title || "",
-    description: row.description ?? row.message ?? "",
+    title: String(row.title || ""),
+    description: String(row.description ?? row.message ?? ""),
     projectId: Number(row.projectId ?? row.project_id),
-    priority: (row.priority || "medium") as FeedbackPriority,
-    authorId: Number(row.authorId ?? row.user_id),
-    authorName: row.authorName ?? row.username ?? "ผู้ใช้งาน",
-    status: (row.status || "sent") as FeedbackStatus,
-    createdAt: new Date(row.createdAt ?? row.created_at ?? Date.now()),
-    updatedAt: new Date(row.updatedAt ?? row.updated_at ?? row.created_at ?? Date.now()),
+    priority: normalizePriority(row.priority),
+    authorId: Number(row.authorId ?? row.user_id ?? 0),
+    authorName: String(row.authorName ?? row.username ?? "ผู้ใช้งาน"),
+    status: normalizeStatus(row.status),
+    createdAt: safeDate(row.createdAt ?? row.created_at),
+    updatedAt: safeDate(row.updatedAt ?? row.updated_at ?? row.created_at),
     isRead: Boolean(row.isRead ?? row.is_read ?? false),
     comments: replies.map((reply) => normalizeReply(reply, currentUser)),
   }
 }
 
-function normalizeReply(row: any, currentUser: { id: number; username: string; role: "admin" | "customer" }): FeedbackComment {
-  const authorId = Number(row.authorId ?? row.user_id)
+function normalizeReply(
+  row: any,
+  currentUser: { id: number; username: string; role: UserRole },
+): FeedbackComment {
+  const authorId = Number(row.authorId ?? row.user_id ?? 0)
+  const rawRole = row.authorRole ?? row.author_role ?? row.role
+  const authorRole: UserRole =
+    rawRole === "admin" || rawRole === "customer"
+      ? rawRole
+      : authorId === currentUser.id
+        ? currentUser.role
+        : currentUser.role === "admin"
+          ? "customer"
+          : "admin"
+
   return {
     id: Number(row.id),
     authorId,
-    authorName: row.authorName ?? row.username ?? "ผู้ใช้งาน",
-    authorRole: authorId === currentUser.id ? currentUser.role : (currentUser.role === "admin" ? "customer" : "admin"),
-    message: row.message || "",
-    createdAt: new Date(row.createdAt ?? row.created_at ?? Date.now()),
+    authorName: String(row.authorName ?? row.username ?? "ผู้ใช้งาน"),
+    authorRole,
+    message: String(row.message ?? row.content ?? ""),
+    createdAt: safeDate(row.createdAt ?? row.created_at),
   }
 }
 
-const S: Record<string, React.CSSProperties> = {
+function normalizeStatus(value: unknown): FeedbackStatus {
+  return value === "in_progress" || value === "resolved" ? value : "sent"
+}
+
+function normalizePriority(value: unknown): FeedbackPriority {
+  return value === "low" || value === "high" ? value : "medium"
+}
+
+function safeDate(value: unknown): Date {
+  const date = value ? new Date(String(value)) : new Date()
+  return Number.isNaN(date.getTime()) ? new Date() : date
+}
+
+function formatDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) return "ไม่ระบุวันที่"
+  return date.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })
+}
+
+function formatTime(date: Date): string {
+  if (Number.isNaN(date.getTime())) return ""
+  return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })
+}
+
+const S: Record<string, CSSProperties> = {
   page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 16 },
   title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
   subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
   addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
+  secondaryBtn: { display: "flex", alignItems: "center", gap: 7, background: "#111827", border: "1px solid #374151", borderRadius: 8, color: "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 14px", cursor: "pointer" },
   roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
-  listPanel: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden" },
-  detailPanel: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden" },
+  filterRow: { display: "flex", gap: 10, marginBottom: 14 },
+  contentGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 320px) minmax(0, 1fr)", gap: 14, height: "calc(100vh - 280px)", minHeight: 520 },
+  listPanel: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 },
+  detailPanel: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 },
   tabBtn: { border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
-  feedbackItem: { border: "1px solid", borderLeft: "3px solid", borderRadius: 10, padding: "12px 14px", cursor: "pointer", transition: "all 0.15s" },
+  listBody: { flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8 },
+  feedbackItem: { border: "1px solid", borderLeft: "3px solid", borderRadius: 10, padding: "12px 14px", cursor: "pointer", transition: "all 0.15s", width: "100%" },
   unreadDot: { width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0, marginTop: 2 },
-  badge: { fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" as const },
-  input: { background: "#0d1117", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
+  badge: { fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" },
+  input: { background: "#0d1117", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" },
   sendBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   empty: { color: "#374151", fontSize: 13, textAlign: "center", padding: "40px 0", fontStyle: "italic" },
+  loadingBox: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, color: "#6b7280", padding: 40, textAlign: "center" },
+  errorBox: { color: "#fca5a5", background: "#7f1d1d33", border: "1px solid #ef444455", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 },
+  noSelection: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 },
+  descriptionBox: { fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: 0, background: "#0d1117", borderRadius: 8, padding: "12px 14px", whiteSpace: "pre-wrap" },
+  commentsBody: { flex: 1, overflowY: "auto", padding: "16px 24px", display: "flex", flexDirection: "column", gap: 14 },
+  noComments: { color: "#374151", fontSize: 13, textAlign: "center", padding: "32px 0", fontStyle: "italic" },
+  avatar: { width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 },
+  commentInputRow: { padding: "12px 24px", borderTop: "1px solid #1f2937", display: "flex", gap: 10, flexShrink: 0 },
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
   modal: { background: "#111827", border: "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
   modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #1f2937" },
