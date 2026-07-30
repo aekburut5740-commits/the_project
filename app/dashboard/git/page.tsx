@@ -18,7 +18,7 @@ const fallbackStats = [
   { label: "Deploy cadence", value: "—", change: "Loading", tone: "#f59e0b" },
 ]
 
-const weekly = [42, 58, 76, 68, 88, 92, 81]
+const dayLabels = ["S", "M", "T", "W", "T", "F", "S"] // ตรงกับ Date.getDay(): 0=Sun...6=Sat
 
 export default function GitPage() {
   const [commits, setCommits] = useState<CommitItem[]>([])
@@ -52,6 +52,24 @@ export default function GitPage() {
     { label: "Recent pushes", value: String(commits.length), change: commits.length ? "Fetched" : "Waiting", tone: "#a78bfa" },
     { label: "Deploy cadence", value: "Live", change: "Auto refresh", tone: "#f59e0b" },
   ], [commits, repo])
+
+  // นับจำนวน commit จริงย้อนหลัง 7 วัน (จากชุด commit ล่าสุดที่ GitHub ส่งมา)
+  const weeklyActivity = useMemo(() => {
+    const days: { label: string; count: number }[] = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      d.setDate(d.getDate() - i)
+      const count = commits.filter((c) => {
+        const cd = new Date(c.date)
+        return cd.toDateString() === d.toDateString()
+      }).length
+      days.push({ label: dayLabels[d.getDay()], count })
+    }
+    return days
+  }, [commits])
+
+  const maxWeeklyCount = Math.max(1, ...weeklyActivity.map((d) => d.count))
 
   return (
     <div style={S.page}>
@@ -135,17 +153,20 @@ export default function GitPage() {
           <div style={S.panelHeader}>
             <div>
               <div style={S.panelTitle}>Weekly activity</div>
-              <div style={S.panelSub}>Simple visual overview</div>
+              <div style={S.panelSub}>Commit count from the last 7 days</div>
             </div>
           </div>
 
           <div style={S.chartWrap}>
-            {weekly.map((value, index) => (
-              <div key={`${value}-${index}`} style={S.barCol}>
-                <div style={{ ...S.bar, height: `${value}%` }} />
-                <div style={S.barLabel}>{["M", "T", "W", "T", "F", "S", "S"][index]}</div>
-              </div>
-            ))}
+            {weeklyActivity.map((day, index) => {
+              const heightPct = day.count === 0 ? 4 : (day.count / maxWeeklyCount) * 100
+              return (
+                <div key={`${day.label}-${index}`} style={S.barCol}>
+                  <div style={{ ...S.bar, height: `${heightPct}%`, opacity: day.count === 0 ? 0.25 : 1 }} title={`${day.count} commit${day.count === 1 ? "" : "s"}`} />
+                  <div style={S.barLabel}>{day.label}</div>
+                </div>
+              )
+            })}
           </div>
         </div>
 

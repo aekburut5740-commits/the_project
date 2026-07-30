@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
 import { useSearchParams } from "next/navigation"
 import { MessageSquare, Plus, RefreshCw, Send } from "lucide-react"
-import { useNotifications } from "@/lib/notificationStore"
 import { backend, normalizeProject } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
 
@@ -58,7 +57,6 @@ export default function FeedbackPage() {
   const requestedProjectId = Number(searchParams.get("project"))
   const user = getUser() || { id: 0, username: "", role: "customer" as const }
   const isAdmin = user.role === "admin"
-  const { addNotif } = useNotifications()
 
   const [projects, setProjects] = useState<Project[]>([])
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
@@ -176,15 +174,6 @@ export default function FeedbackPage() {
         message: data.description.trim(),
         priority: data.priority,
       })
-
-      const project = projects.find((item) => item.id === data.projectId)
-      addNotif({
-        type: "feedback",
-        title: "มี Feedback ใหม่",
-        message: `${user.username || "ผู้ใช้งาน"} ส่ง feedback “${data.title.trim()}” ใน ${project?.name || "โปรเจค"}`,
-        forUserId: "all",
-      })
-
       setSelectedProjectId(data.projectId)
       setShowCreate(false)
       await loadFeedbacks()

@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard, FolderKanban, Flag, Bell,
   MessageSquare, FileText, GitBranch, BarChart2,
   Settings, LogOut, Pencil, Check, X, Camera
 } from "lucide-react";
-import { useNotifications } from "@/lib/notificationStore";
-import { MOCK_CURRENT_USER, MOCK_FEEDBACKS } from "@/lib/mockData";
+import { getUser } from "@/lib/auth";
+import { backend } from "@/lib/backend";
 
 const navItems = [
   { label: "Dashboard",      href: "/dashboard",               icon: LayoutDashboard },
@@ -22,19 +22,52 @@ const navItems = [
   { label: "Reports",        href: "/dashboard/reports",       icon: BarChart2 },
 ];
 
+interface ProfileInfo {
+  id: number;
+  username: string;
+  email: string;
+  role: "admin" | "customer";
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
-  const user = MOCK_CURRENT_USER;
-  const isAdmin = user.role === "admin";
-  const { unreadCount } = useNotifications();
-  const count = unreadCount(user.id, isAdmin);
-  const feedbackUnread = isAdmin ? MOCK_FEEDBACKS.filter((f) => !f.isRead).length : 0;
+  const jwtUser = getUser();
+  const isAdmin = jwtUser?.role === "admin";
 
-  // Profile state
+  // ข้อมูล User จริง: เริ่มจาก JWT ก่อน (แสดงผลได้ทันที) แล้วค่อยอัปเดตด้วยข้อมูลล่าสุดจาก Backend
+  const [profile, setProfile] = useState<ProfileInfo | null>(
+    jwtUser ? { id: jwtUser.id, username: jwtUser.username, email: "", role: jwtUser.role } : null
+  );
+
+  useEffect(() => {
+    backend.profile()
+      .then((res: any) => setProfile(res.user))
+      .catch(() => {});
+  }, []);
+
+  // จุดแดง Notification / Feedback: นับจากข้อมูลจริงของ Backend
+  // โหลดใหม่ทุกครั้งที่เปลี่ยนหน้า เพื่อให้ badge อัปเดตหลังจากไปกดอ่านในหน้า Notifications/Feedback มาแล้ว
+  const [notifCount, setNotifCount] = useState(0);
+  const [feedbackUnread, setFeedbackUnread] = useState(0);
+
+  useEffect(() => {
+    if (!jwtUser) return;
+
+    backend.notifications()
+      .then((list: any[]) => setNotifCount(Array.isArray(list) ? list.filter((n) => !n.is_read).length : 0))
+      .catch(() => {});
+
+    if (isAdmin) {
+      // ยังไม่มี "อ่านแล้ว" สำหรับ Feedback ใน Backend เลยใช้สถานะ "sent" (ยังไม่มีใครรับเรื่อง) แทนความหมาย "ยังไม่อ่าน"
+      backend.allFeedbacks()
+        .then((list: any[]) => setFeedbackUnread(Array.isArray(list) ? list.filter((f) => f.status === "sent").length : 0))
+        .catch(() => {});
+    }
+  }, [pathname, isAdmin, jwtUser?.id]);
+
+  // Avatar: ยังไม่มี endpoint ใน Backend รองรับการอัปโหลด/บันทึกรูปโปรไฟล์
+  // เก็บไว้เป็น preview ในเครื่อง/เซสชันนี้เท่านั้น รีเฟรชแล้วจะหาย
   const [avatar, setAvatar] = useState<string | null>(null);
-  const [username, setUsername] = useState(user.username);
-  const [editingName, setEditingName] = useState(false);
-  const [tempName, setTempName] = useState(username);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -45,11 +78,47 @@ export default function Sidebar() {
     reader.readAsDataURL(file);
   }
 
-  function confirmName() {
-    if (tempName.trim()) setUsername(tempName.trim());
+  // แก้ชื่อผู้ใช้: บันทึกผ่าน Backend จริง (endpoint เดียวกับหน้า Settings)
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState("");
+
+  function startEdit() {
+    if (!profile) return;
+    setTempName(profile.username);
+    setNameError("");
+    setEditingName(true);
+  }
+
+  function cancelEdit() {
+    setNameError("");
     setEditingName(false);
   }
 
+  async function confirmName() {
+    const newName = tempName.trim();
+    if (!profile || !newName || savingName) return;
+    if (newName === profile.username) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    setNameError("");
+    try {
+      await backend.updateProfile(newName, profile.email);
+      setProfile({ ...profile, username: newName });
+      setEditingName(false);
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : "บันทึกชื่อไม่สำเร็จ");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  const username = profile?.username || jwtUser?.username || "ผู้ใช้งาน";
+  const role = profile?.role || jwtUser?.role || "customer";
+  const canEditName = !!profile?.email; // ต้องมี email จาก Backend ก่อนถึงจะแก้ชื่อได้ (updateProfile ต้องใช้คู่กัน)
   const initials = username.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
 
   return (
@@ -67,8 +136,8 @@ export default function Sidebar() {
             >
               <Icon size={17} />
               <span className="flex-1">{label}</span>
-              {/* Badge ตัวเลขแจ้งเตือน */}
-              {isNotif && count > 0 && (
+              {/* Badge ตัวเลขแจ้งเตือน (นับจาก Backend จริง) */}
+              {isNotif && notifCount > 0 && (
                 <span style={{
                   background: active ? "#fff" : "#ef4444",
                   color: active ? "#2563eb" : "#fff",
@@ -79,7 +148,7 @@ export default function Sidebar() {
                   minWidth: 18,
                   textAlign: "center",
                 }}>
-                  {count > 99 ? "99+" : count}
+                  {notifCount > 99 ? "99+" : notifCount}
                 </span>
               )}
               {isFeedback && feedbackUnread > 0 && (
@@ -130,24 +199,30 @@ export default function Sidebar() {
             {/* Name */}
             <div className="flex-1 min-w-0">
               {editingName ? (
-                <div className="flex items-center gap-1">
-                  <input autoFocus value={tempName}
-                    onChange={(e) => setTempName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") confirmName(); if (e.key === "Escape") { setTempName(username); setEditingName(false); } }}
-                    className="w-full bg-white/10 text-white text-sm rounded px-2 py-0.5 outline-none border border-blue-500/60 min-w-0" />
-                  <button onClick={confirmName} className="text-green-400 hover:text-green-300 flex-shrink-0"><Check size={13} /></button>
-                  <button onClick={() => { setTempName(username); setEditingName(false); }} className="text-gray-500 hover:text-gray-300 flex-shrink-0"><X size={13} /></button>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <input autoFocus value={tempName}
+                      disabled={savingName}
+                      onChange={(e) => setTempName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") confirmName(); if (e.key === "Escape") cancelEdit(); }}
+                      className="w-full bg-white/10 text-white text-sm rounded px-2 py-0.5 outline-none border border-blue-500/60 min-w-0" />
+                    <button onClick={confirmName} disabled={savingName} className="text-green-400 hover:text-green-300 flex-shrink-0 disabled:opacity-50"><Check size={13} /></button>
+                    <button onClick={cancelEdit} disabled={savingName} className="text-gray-500 hover:text-gray-300 flex-shrink-0 disabled:opacity-50"><X size={13} /></button>
+                  </div>
+                  {nameError && <div className="text-[10px] text-red-400 mt-1">{nameError}</div>}
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 group/name">
                   <span className="text-sm text-white font-medium truncate">{username}</span>
-                  <button onClick={() => { setTempName(username); setEditingName(true); }}
-                    className="text-gray-600 hover:text-gray-300 opacity-0 group-hover/name:opacity-100 transition-opacity flex-shrink-0">
-                    <Pencil size={11} />
-                  </button>
+                  {canEditName && (
+                    <button onClick={startEdit}
+                      className="text-gray-600 hover:text-gray-300 opacity-0 group-hover/name:opacity-100 transition-opacity flex-shrink-0">
+                      <Pencil size={11} />
+                    </button>
+                  )}
                 </div>
               )}
-              <span className="text-xs text-gray-500">{user.role}</span>
+              <span className="text-xs text-gray-500">{role}</span>
             </div>
           </div>
         </div>

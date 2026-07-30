@@ -15,14 +15,12 @@ import {
   normalizeProject,
 } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
-import { useNotifications } from "@/lib/notificationStore"
 
 const PACKAGES = ["Starter", "Professional", "Enterprise"]
 
 export default function ProjectsPage() {
   const user = getUser() || { id: 0, username: "", role: "customer" as const }
   const isAdmin = user.role === "admin"
-  const { addNotif } = useNotifications()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -95,7 +93,6 @@ export default function ProjectsPage() {
         })) as Project
         const managers = isAdmin ? await addNewManagers(created.id, updated.managers) : []
         setProjects((prev) => [...prev, { ...created, managers }])
-        addNotif({ type: "project", title: "โปรเจคใหม่ถูกสร้าง", message: `Admin สร้างโปรเจค "${updated.name}" แล้ว`, forUserId: "all" })
       } else {
         const old = projects.find((project) => project.id === updated.id)
         if (isAdmin) {
@@ -114,7 +111,6 @@ export default function ProjectsPage() {
           })
         }
         await loadProjects()
-        addNotif({ type: "project", title: "โปรเจคของคุณถูกอัปเดต", message: `Admin แก้ไขโปรเจค "${updated.name}"${old?.status !== updated.status ? ` → สถานะเปลี่ยนเป็น "${STATUS_CONFIG[updated.status].label}"` : ""}`, forUserId: updated.ownerId })
       }
       setEditingProject(null)
       setIsCreating(false)
@@ -124,12 +120,10 @@ export default function ProjectsPage() {
   }
 
   async function handleDelete(id: number) {
-    const project = projects.find((item) => item.id === id)
     setError("")
     try {
       await backend.deleteProject(id)
       setProjects((prev) => prev.filter((item) => item.id !== id))
-      if (project) addNotif({ type: "project", title: "โปรเจคถูกลบ", message: `Admin ลบโปรเจค "${project.name}" แล้ว`, forUserId: project.ownerId })
       setEditingProject(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "ลบโปรเจคไม่สำเร็จ")

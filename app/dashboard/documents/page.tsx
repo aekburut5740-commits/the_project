@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { FileText, FileImage, File, Download, Trash2, Upload, Search, FolderOpen, Eye, Lock } from "lucide-react"
-import { useNotifications } from "@/lib/notificationStore"
 import { getUser } from "@/lib/auth"
 import { backend, normalizeProject } from "@/lib/backend"
 
@@ -71,8 +70,6 @@ export default function DocumentVaultPage() {
   const user = getUser()
   const isAdmin = user?.role === "admin"
   const [projects, setProjects] = useState<Project[]>([])
-
-  const { addNotif } = useNotifications()
   const [docs, setDocs] = useState<DocumentWithUrl[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -149,13 +146,6 @@ export default function DocumentVaultPage() {
         is_confidential: (response as any)?.is_confidential ?? newDoc.isConfidential,
       })
       setDocs((prev) => [...prev, saved])
-      const proj = projects.find((p) => p.id === newDoc.projectId)
-      addNotif({
-        type: "document",
-        title: "อัปโหลดเอกสารใหม่",
-        message: `Admin อัปโหลด ${newDoc.name} ใน ${proj?.name}`,
-        forUserId: proj?.ownerId ?? "all",
-      })
       setShowUpload(false)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "อัปโหลดเอกสารไม่สำเร็จ")
@@ -239,16 +229,9 @@ export default function DocumentVaultPage() {
                     onPreview={() => setPreviewDoc(doc)}
                     onDelete={async () => {
                       if (confirm("ลบเอกสารนี้?")) {
-                        const proj = projects.find((p) => p.id === doc.projectId)
                         try {
                           await backend.deleteFile(doc.id)
                           setDocs((prev) => prev.filter((d) => d.id !== doc.id))
-                          addNotif({
-                            type: "document",
-                            title: "เอกสารถูกลบ",
-                            message: `Admin ลบ ${doc.name} ออกจาก ${proj?.name}`,
-                            forUserId: proj?.ownerId ?? "all",
-                          })
                         } catch (err) { setError(err instanceof Error ? err.message : "ลบเอกสารไม่สำเร็จ") }
                       }
                     }} />

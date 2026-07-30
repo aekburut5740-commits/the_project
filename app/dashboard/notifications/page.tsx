@@ -69,8 +69,15 @@ export default function NotificationsPage() {
     }
   }
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
+    const prevState = notifications
     setNotifications((prev) => prev.filter((n) => n.id !== id))
+    try {
+      await backend.deleteNotification(id)
+    } catch (err) {
+      setNotifications(prevState)
+      setError(err instanceof Error ? err.message : "ไม่สามารถลบแจ้งเตือนได้")
+    }
   }
 
   if (loading) {

@@ -4,11 +4,8 @@ import Link from "next/link"
 import { use, useEffect, useState } from "react"
 import { backend, normalizeProject } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
-import {
-  STATUS_CONFIG,
-  type Manager,
-  type Project,
-} from "@/lib/mockData"
+import { STATUS_CONFIG } from "@/lib/project-config"
+import type { Manager, Project } from "@/types/project"
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)

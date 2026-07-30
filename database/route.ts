@@ -430,6 +430,16 @@ export async function deleteComment(comment_id: number, user_id: number, role: s
   return result.rows[0]
 }
 
+// Customer: ลบการแจ้งเตือนของตัวเอง
+export async function deleteNotification(notification_id: number, user_id: number) {
+  const result = await db.query(
+    `DELETE FROM notifications WHERE id = $1 AND user_id = $2 RETURNING *`,
+    [notification_id, user_id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบการแจ้งเตือน หรือไม่มีสิทธิ์ลบ")
+  return result.rows[0]
+}
+
 // ===== FILE UPLOAD =====
 
 // บันทึกข้อมูลไฟล์ลง Database

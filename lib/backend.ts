@@ -88,6 +88,7 @@ projectMembers: (projectId: number) =>
   notifications: () => apiFetch<any[]>("/api/notifications"),
   markNotificationRead: (id: number) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
+  deleteNotification: (id: number) => apiFetch(`/api/notifications/${id}`, { method: "DELETE" }),
   comments: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/comments`),
   createComment: (projectId: number, content: string) => apiFetch(`/api/projects/${projectId}/comments`, { method: "POST", body: JSON.stringify({ content }) }),
   deleteComment: (id: number) => apiFetch(`/api/comments/${id}`, { method: "DELETE" }),
