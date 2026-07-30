@@ -868,3 +868,15 @@ export async function removeProjectMember(id: number) {
   if (!result.rows.length) throw new Error("ไม่พบผู้ดูแล")
   return result.rows[0]
 }
+
+// ===== FEEDBACK READ =====
+
+// บันทึกว่าอ่าน Feedback แล้ว
+export async function markFeedbackAsRead(feedback_id: number) {
+  const result = await db.query(
+    `UPDATE feedbacks SET is_read = TRUE WHERE id = $1 RETURNING *`,
+    [feedback_id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบ Feedback")
+  return result.rows[0]
+}
