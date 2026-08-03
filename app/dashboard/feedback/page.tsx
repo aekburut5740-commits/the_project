@@ -145,17 +145,25 @@ export default function FeedbackPage() {
     }
   }, [requestedProjectId])
 
-  function handleSelect(id: number) {
-    setSelectedId(id)
+  async function handleSelect(id: number) {
+  setSelectedId(id)
 
-    if (isAdmin) {
+  if (isAdmin) {
+    const feedback = feedbacks.find((f) => f.id === id)
+    if (feedback && !feedback.isRead) {
+      // อัปเดต UI ทันที
       setFeedbacks((previous) =>
-        previous.map((feedback) =>
-          feedback.id === id ? { ...feedback, isRead: true } : feedback,
-        ),
+        previous.map((f) => f.id === id ? { ...f, isRead: true } : f)
       )
+      // บอก backend ว่าอ่านแล้ว — ใส่ try/catch ไม่ให้ crash ถ้า API ยังไม่มี
+      try {
+        await backend.markFeedbackRead(id)
+      } catch {
+        // TODO: เพิ่ม endpoint PUT /api/admin/feedbacks/:id/read ฝั่ง backend
+      }
     }
   }
+}
 
   async function handleCreate(data: {
     title: string
