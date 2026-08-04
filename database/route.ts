@@ -115,12 +115,14 @@ export async function createProject(
   domain?: string,
   start_date?: string,
   package_name?: string,
-  token?: string
+  token?: string,
+  website?: string
 ) {
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS website TEXT;`)
   const result = await db.query(
-    `INSERT INTO projects (name, description, user_id, domain, start_date, package, token) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [name, description, user_id, domain || null, start_date || null, package_name || null, token || null]
+    `INSERT INTO projects (name, description, user_id, domain, start_date, package, token, website) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [name, description, user_id, domain || null, start_date || null, package_name || null, token || null, website || null]
   )
   return result.rows[0]
 }
@@ -153,8 +155,10 @@ export async function updateAdminProject(
   domain?: string,
   start_date?: string,
   package_name?: string,
-  token?: string
+  token?: string,
+  website?: string
 ) {
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS website TEXT;`)
   const result = await db.query(
     `UPDATE projects SET
        name = COALESCE($1, name),
@@ -163,9 +167,10 @@ export async function updateAdminProject(
        domain = COALESCE($4, domain),
        start_date = COALESCE($5, start_date),
        package = COALESCE($6, package),
-       token = COALESCE($7, token)
+       token = COALESCE($7, token),
+       website = COALESCE($9, website)
      WHERE id = $8 RETURNING *`,
-    [name, description, status, domain, start_date || null, package_name, token, id]
+    [name, description, status, domain, start_date || null, package_name, token, id, website]
   )
   if (!result.rows.length) throw new Error("ไม่พบโปรเจค")
   return result.rows[0]
@@ -193,15 +198,17 @@ export async function updateProject(
   domain?: string,
   start_date?: string,
   package_name?: string,
-  token?: string
+  token?: string,
+  website?: string
 ) {
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS website TEXT;`)
   const result = await db.query(
     `UPDATE projects 
      SET name = $1, description = $2, domain = $3, 
-         start_date = $4, package = $5, token = $6
+         start_date = $4, package = $5, token = $6, website = $9
      WHERE id = $7 AND user_id = $8 
      RETURNING *`,
-    [name, description, domain || null, start_date || null, package_name || null, token || null, id, user_id]
+    [name, description, domain || null, start_date || null, package_name || null, token || null, id, user_id, website || null]
   )
   if (!result.rows.length) {
     throw new Error("ไม่พบโปรเจคหรือไม่มีสิทธิ์แก้ไข")
@@ -878,5 +885,43 @@ export async function markFeedbackAsRead(feedback_id: number) {
     [feedback_id]
   )
   if (!result.rows.length) throw new Error("ไม่พบ Feedback")
+  return result.rows[0]
+}
+
+// ===== GUEST PREVIEW & SHARE TOKEN =====
+
+export async function getProjectByShareToken(shareToken: string) {
+  // เพิ่ม column ถ้ายังไม่มี
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS share_token VARCHAR(255);`)
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS view_count INT DEFAULT 0;`)
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP;`)
+
+  const result = await db.query(
+    `UPDATE projects 
+     SET view_count = COALESCE(view_count, 0) + 1,
+         last_viewed_at = CURRENT_TIMESTAMP
+     WHERE share_token = $1
+     RETURNING *`,
+    [shareToken]
+  )
+  if (!result.rows.length) {
+    // ถ้ายังไม่เจอ token ใน DB อาจจะลองค้นหาด้วย ID เผื่อ token เป็น "demo-proj-id"
+    const fallback = await db.query(`SELECT * FROM projects WHERE id = $1 LIMIT 1`, [isNaN(Number(shareToken)) ? 0 : Number(shareToken)])
+    if (fallback.rows.length) return fallback.rows[0]
+    throw new Error("ไม่พบโปรเจคที่ต้องการดูพรีวิว หรือ Share Token ไม่ถูกต้อง")
+  }
+  return result.rows[0]
+}
+
+export async function generateShareToken(projectId: number) {
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS share_token VARCHAR(255);`)
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS view_count INT DEFAULT 0;`)
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP;`)
+
+  const token = `demo-${projectId}-${Math.random().toString(36).substring(2, 9)}`
+  const result = await db.query(
+    `UPDATE projects SET share_token = $1 WHERE id = $2 RETURNING *`,
+    [token, projectId]
+  )
   return result.rows[0]
 }

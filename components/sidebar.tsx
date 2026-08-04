@@ -6,10 +6,26 @@ import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard, FolderKanban, Flag, Bell,
   MessageSquare, FileText, GitBranch, BarChart2,
-  Settings, LogOut, Pencil, Check, X, Camera
+  Settings, LogOut, Pencil, Check, X, Camera, Sun, Moon
 } from "lucide-react";
 import { getUser } from "@/lib/auth";
 import { backend } from "@/lib/backend";
+import { useTheme } from "@/lib/themeContext";
+
+function ThemeToggleButton() {
+  const { theme, toggleTheme } = useTheme();
+  const isLight = theme === "light";
+  return (
+    <button
+      onClick={toggleTheme}
+      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+      title="สลับธีมระบบ"
+    >
+      {isLight ? <Moon size={17} /> : <Sun size={17} />}
+      <span>{isLight ? "Dark Mode" : "Light Mode"}</span>
+    </button>
+  );
+}
 
 const navItems = [
   { label: "Dashboard",      href: "/dashboard",               icon: LayoutDashboard },
@@ -31,44 +47,46 @@ interface ProfileInfo {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const jwtUser = getUser();
-  const isAdmin = jwtUser?.role === "admin";
-
-  // ข้อมูล User จริง: เริ่มจาก JWT ก่อน (แสดงผลได้ทันที) แล้วค่อยอัปเดตด้วยข้อมูลล่าสุดจาก Backend
-  const [profile, setProfile] = useState<ProfileInfo | null>(
-    jwtUser ? { id: jwtUser.id, username: jwtUser.username, email: "", role: jwtUser.role } : null
-  );
+  const [mounted, setMounted] = useState(false);
+  const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const [notifCount, setNotifCount] = useState(0);
+  const [feedbackUnread, setFeedbackUnread] = useState(0);
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setMounted(true);
+    const jwtUser = getUser();
+    if (jwtUser) {
+      setProfile({ id: jwtUser.id, username: jwtUser.username, email: "", role: jwtUser.role });
+    }
     backend.profile()
-      .then((res: any) => setProfile(res.user))
+      .then((res: any) => {
+        if (res?.user) setProfile(res.user);
+      })
       .catch(() => {});
   }, []);
 
-  // จุดแดง Notification / Feedback: นับจากข้อมูลจริงของ Backend
-  // โหลดใหม่ทุกครั้งที่เปลี่ยนหน้า เพื่อให้ badge อัปเดตหลังจากไปกดอ่านในหน้า Notifications/Feedback มาแล้ว
-  const [notifCount, setNotifCount] = useState(0);
-  const [feedbackUnread, setFeedbackUnread] = useState(0);
+  const jwtUser = getUser();
+  const isAdmin = profile?.role === "admin" || jwtUser?.role === "admin";
 
   useEffect(() => {
-    if (!jwtUser) return;
+    if (!mounted) return;
 
     backend.notifications()
       .then((list: any[]) => setNotifCount(Array.isArray(list) ? list.filter((n) => !n.is_read).length : 0))
-      .catch(() => {});
+      .catch(() => setNotifCount(0));
 
     if (isAdmin) {
-      // ยังไม่มี "อ่านแล้ว" สำหรับ Feedback ใน Backend เลยใช้สถานะ "sent" (ยังไม่มีใครรับเรื่อง) แทนความหมาย "ยังไม่อ่าน"
       backend.allFeedbacks()
-        .then((list: any[]) => setFeedbackUnread(Array.isArray(list) ? list.filter((f) => f.status === "sent").length : 0))
-        .catch(() => {});
+        .then((list: any[]) => setFeedbackUnread(Array.isArray(list) ? list.filter((f) => f.status === "sent" || f.status === "pending" || f.status === "received" || f.status === "in_progress").length : 0))
+        .catch(() => setFeedbackUnread(0));
     }
-  }, [pathname, isAdmin, jwtUser?.id]);
-
-  // Avatar: ยังไม่มี endpoint ใน Backend รองรับการอัปโหลด/บันทึกรูปโปรไฟล์
-  // เก็บไว้เป็น preview ในเครื่อง/เซสชันนี้เท่านั้น รีเฟรชแล้วจะหาย
-  const [avatar, setAvatar] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  }, [pathname, isAdmin, mounted]);
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -77,12 +95,6 @@ export default function Sidebar() {
     reader.onload = () => setAvatar(reader.result as string);
     reader.readAsDataURL(file);
   }
-
-  // แก้ชื่อผู้ใช้: บันทึกผ่าน Backend จริง (endpoint เดียวกับหน้า Settings)
-  const [editingName, setEditingName] = useState(false);
-  const [tempName, setTempName] = useState("");
-  const [savingName, setSavingName] = useState(false);
-  const [nameError, setNameError] = useState("");
 
   function startEdit() {
     if (!profile) return;
@@ -118,7 +130,7 @@ export default function Sidebar() {
 
   const username = profile?.username || jwtUser?.username || "ผู้ใช้งาน";
   const role = profile?.role || jwtUser?.role || "customer";
-  const canEditName = !!profile?.email; // ต้องมี email จาก Backend ก่อนถึงจะแก้ชื่อได้ (updateProfile ต้องใช้คู่กัน)
+  const canEditName = !!profile?.email;
   const initials = username.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
 
   return (
@@ -130,13 +142,12 @@ export default function Sidebar() {
           const isFeedback = href === "/dashboard/feedback";
           return (
             <Link key={href} href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                active ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-white/10 hover:text-white"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                active ? "bg-blue-600 text-white font-semibold" : "text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
               }`}
             >
-              <Icon size={17} />
+              <Icon size={17} className={active ? "text-white" : "text-gray-500 dark:text-gray-400"} />
               <span className="flex-1">{label}</span>
-              {/* Badge ตัวเลขแจ้งเตือน (นับจาก Backend จริง) */}
               {isNotif && notifCount > 0 && (
                 <span style={{
                   background: active ? "#fff" : "#ef4444",
@@ -169,15 +180,21 @@ export default function Sidebar() {
 
       <div className="px-3 pb-4 space-y-0.5">
         <Link href="/dashboard/settings"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
-          <Settings size={17} /><span>Settings</span>
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+            pathname === "/dashboard/settings"
+              ? "bg-blue-600 text-white font-semibold"
+              : "text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+          }`}>
+          <Settings size={17} className={pathname === "/dashboard/settings" ? "text-white" : "text-gray-500 dark:text-gray-400"} />
+          <span>Settings</span>
         </Link>
+        <ThemeToggleButton />
         <Link href="/login"
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors">
           <LogOut size={17} /><span>Logout</span>
         </Link>
 
-        <div className="border-t border-white/10 my-2" />
+        <div className="border-t border-gray-200 dark:border-white/10 my-2" />
 
         {/* Profile */}
         <div className="px-1 pt-1">
@@ -187,7 +204,7 @@ export default function Sidebar() {
               <div className="w-9 h-9 rounded-full overflow-hidden bg-blue-600/30 border border-white/10 flex items-center justify-center text-sm font-bold text-blue-400">
                 {avatar
                   ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
-                  : initials}
+                  : (mounted ? initials : "")}
               </div>
               <button onClick={() => fileRef.current?.click()}
                 className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
@@ -213,7 +230,7 @@ export default function Sidebar() {
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 group/name">
-                  <span className="text-sm text-white font-medium truncate">{username}</span>
+                  <span suppressHydrationWarning className="text-sm text-white font-medium truncate">{mounted ? username : ""}</span>
                   {canEditName && (
                     <button onClick={startEdit}
                       className="text-gray-600 hover:text-gray-300 opacity-0 group-hover/name:opacity-100 transition-opacity flex-shrink-0">
@@ -222,7 +239,7 @@ export default function Sidebar() {
                   )}
                 </div>
               )}
-              <span className="text-xs text-gray-500">{role}</span>
+              <span suppressHydrationWarning className="text-xs text-gray-500">{mounted ? role : ""}</span>
             </div>
           </div>
         </div>

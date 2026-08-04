@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { getUser, setToken } from "@/lib/auth"
 import { backend } from "@/lib/backend"
+import { useTheme } from "@/lib/themeContext"
 
 type Tab = "account" | "notifications" | "users" | "system"
 
@@ -59,16 +60,12 @@ function formatDate(value?: string) {
 function getInitials(username: string) {
   const trimmed = username.trim()
   if (!trimmed) return "U"
-
-  return trimmed
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2)
+  return trimmed.slice(0, 2).toUpperCase()
 }
 
 export default function SettingsPage() {
+  const { theme } = useTheme()
+  const isLight = theme === "light"
   const tokenUser = getUser()
   const isAdmin = tokenUser?.role === "admin"
 
@@ -340,7 +337,7 @@ export default function SettingsPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className={`min-h-screen ${isLight ? "bg-slate-50 text-slate-900" : "bg-slate-950 text-slate-100"}`}>
       <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-8">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -378,8 +375,8 @@ export default function SettingsPage() {
         )}
 
         <div className="grid gap-6 lg:grid-cols-[230px_minmax(0,1fr)]">
-          <aside className="h-fit space-y-4 rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/20">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <aside className={`h-fit space-y-4 rounded-3xl border p-5 shadow-xl ${isLight ? "border-slate-200 bg-white shadow-slate-200/50" : "border-slate-800 bg-slate-900 shadow-black/20"}`}>
+            <p className={`text-xs font-semibold uppercase tracking-[0.22em] ${isLight ? "text-slate-400" : "text-slate-500"}`}>
               เมนู Settings
             </p>
 
@@ -396,8 +393,8 @@ export default function SettingsPage() {
                     }}
                     className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
                       activeTab === tab.id
-                        ? "bg-slate-800 text-white shadow-inner"
-                        : "bg-slate-950/70 text-slate-300 hover:bg-slate-800"
+                        ? (isLight ? "bg-blue-600 text-white shadow-sm" : "bg-slate-800 text-white shadow-inner")
+                        : (isLight ? "bg-slate-50 text-slate-700 hover:bg-slate-100" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800")
                     }`}
                   >
                     {tab.icon}
@@ -406,16 +403,16 @@ export default function SettingsPage() {
                 ))}
             </nav>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <div className={`rounded-2xl border p-4 ${isLight ? "border-slate-200 bg-slate-50" : "border-slate-800 bg-slate-950/70"}`}>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 font-bold text-slate-950">
                   {getInitials(profile.username)}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-white">
+                  <p className={`truncate text-sm font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>
                     {profile.username || "ไม่ระบุชื่อ"}
                   </p>
-                  <p className="mt-1 text-xs capitalize text-slate-500">
+                  <p className={`mt-1 text-xs capitalize ${isLight ? "text-slate-500" : "text-slate-400"}`}>
                     {profile.role}
                   </p>
                 </div>
@@ -423,7 +420,7 @@ export default function SettingsPage() {
             </div>
           </aside>
 
-          <section className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/20 sm:p-8">
+          <section className={`min-w-0 rounded-3xl border p-5 shadow-xl sm:p-8 ${isLight ? "border-slate-200 bg-white shadow-slate-200/50 text-slate-900" : "border-slate-800 bg-slate-900 shadow-black/20 text-slate-100"}`}>
             {loading ? (
               <div className="py-20 text-center text-sm text-slate-400">
                 กำลังโหลดการตั้งค่า...
@@ -431,33 +428,33 @@ export default function SettingsPage() {
             ) : activeTab === "account" ? (
               <>
                 <div className="mb-8">
-                  <p className="text-sm uppercase tracking-[0.24em] text-slate-500">
+                  <p className={`text-sm uppercase tracking-[0.24em] ${isLight ? "text-slate-400" : "text-slate-500"}`}>
                     Account
                   </p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">
+                  <h2 className={`mt-3 text-2xl font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>
                     ข้อมูลบัญชี
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
+                  <p className={`mt-2 max-w-2xl text-sm leading-7 ${isLight ? "text-slate-600" : "text-slate-400"}`}>
                     ชื่อผู้ใช้ อีเมล และรหัสผ่านในหน้านี้บันทึกผ่าน Backend
                     โดยตรง
                   </p>
                 </div>
 
                 <div className="grid gap-5 md:grid-cols-2">
-                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
-                    <span className="text-sm font-semibold text-slate-300">
+                  <label className={`block rounded-3xl border p-5 ${isLight ? "border-slate-200 bg-slate-50" : "border-slate-800 bg-slate-950/70"}`}>
+                    <span className={`text-sm font-semibold ${isLight ? "text-slate-700" : "text-slate-300"}`}>
                       ชื่อผู้ใช้งาน
                     </span>
                     <input
                       value={username}
                       onChange={(event) => setUsername(event.target.value)}
                       autoComplete="username"
-                      className="mt-3 w-full border-b border-slate-800 bg-transparent pb-2 text-white outline-none transition focus:border-sky-500"
+                      className={`mt-3 w-full border-b bg-transparent pb-2 outline-none transition focus:border-sky-500 ${isLight ? "border-slate-300 text-slate-900" : "border-slate-800 text-white"}`}
                     />
                   </label>
 
-                  <label className="block rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
-                    <span className="text-sm font-semibold text-slate-300">
+                  <label className={`block rounded-3xl border p-5 ${isLight ? "border-slate-200 bg-slate-50" : "border-slate-800 bg-slate-950/70"}`}>
+                    <span className={`text-sm font-semibold ${isLight ? "text-slate-700" : "text-slate-300"}`}>
                       อีเมล
                     </span>
                     <input
@@ -466,17 +463,17 @@ export default function SettingsPage() {
                       onChange={(event) => setEmail(event.target.value)}
                       autoComplete="email"
                       placeholder="name@example.com"
-                      className="mt-3 w-full border-b border-slate-800 bg-transparent pb-2 text-white outline-none transition focus:border-sky-500"
+                      className={`mt-3 w-full border-b bg-transparent pb-2 outline-none transition focus:border-sky-500 ${isLight ? "border-slate-300 text-slate-900" : "border-slate-800 text-white"}`}
                     />
                   </label>
                 </div>
 
-                <div className="mt-5 flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className={`mt-5 flex flex-col gap-3 rounded-3xl border p-5 sm:flex-row sm:items-center sm:justify-between ${isLight ? "border-slate-200 bg-slate-50" : "border-slate-800 bg-slate-950/70"}`}>
                   <div>
-                    <p className="text-sm font-semibold text-white">
+                    <p className={`text-sm font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>
                       บันทึกข้อมูลบัญชี
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className={`mt-1 text-xs ${isLight ? "text-slate-500" : "text-slate-500"}`}>
                       {profileChanged
                         ? "มีข้อมูลที่ยังไม่ได้บันทึก"
                         : "ข้อมูลล่าสุดถูกบันทึกแล้ว"}
@@ -493,14 +490,14 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                <div className="mt-7 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:p-6">
-                  <div className="flex items-center gap-3 text-slate-300">
+                <div className={`mt-7 rounded-3xl border p-5 sm:p-6 ${isLight ? "border-slate-200 bg-slate-50" : "border-slate-800 bg-slate-950/70"}`}>
+                  <div className={`flex items-center gap-3 ${isLight ? "text-slate-700" : "text-slate-300"}`}>
                     <Lock size={18} />
                     <div>
-                      <p className="text-sm font-semibold text-white">
+                      <p className={`text-sm font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>
                         เปลี่ยนรหัสผ่าน
                       </p>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <p className={`mt-1 text-sm ${isLight ? "text-slate-500" : "text-slate-500"}`}>
                         กรอกรหัสผ่านเดิมและยืนยันรหัสผ่านใหม่ก่อนบันทึก
                       </p>
                     </div>
@@ -513,7 +510,7 @@ export default function SettingsPage() {
                       placeholder="รหัสผ่านเดิม"
                       type="password"
                       autoComplete="current-password"
-                      className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-500"
+                      className={`w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-sky-500 ${isLight ? "border-slate-200 bg-white text-slate-900" : "border-slate-800 bg-slate-950 text-white"}`}
                     />
                     <div className="grid gap-4 md:grid-cols-2">
                       <input
@@ -522,7 +519,7 @@ export default function SettingsPage() {
                         placeholder="รหัสผ่านใหม่"
                         type="password"
                         autoComplete="new-password"
-                        className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-500"
+                        className={`w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-sky-500 ${isLight ? "border-slate-200 bg-white text-slate-900" : "border-slate-800 bg-slate-950 text-white"}`}
                       />
                       <input
                         value={confirmPassword}
@@ -532,7 +529,7 @@ export default function SettingsPage() {
                         placeholder="ยืนยันรหัสผ่านใหม่"
                         type="password"
                         autoComplete="new-password"
-                        className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-500"
+                        className={`w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-sky-500 ${isLight ? "border-slate-200 bg-white text-slate-900" : "border-slate-800 bg-slate-950 text-white"}`}
                       />
                     </div>
                   </div>
@@ -541,7 +538,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={() => void handleChangePassword()}
                     disabled={changingPassword}
-                    className="mt-4 inline-flex items-center justify-center rounded-2xl border border-slate-700 bg-slate-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className={`mt-4 inline-flex items-center justify-center rounded-2xl border px-5 py-3 text-sm font-semibold transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 ${isLight ? "border-slate-300 bg-white text-slate-900 hover:bg-slate-100" : "border-slate-700 bg-slate-800 text-white"}`}
                   >
                     {changingPassword
                       ? "กำลังเปลี่ยนรหัสผ่าน..."

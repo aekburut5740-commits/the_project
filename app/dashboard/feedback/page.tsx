@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { MessageSquare, Plus, RefreshCw, Send } from "lucide-react"
 import { backend, normalizeProject } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
+import { useTheme } from "@/lib/themeContext"
 
 type UserRole = "admin" | "customer"
 type FeedbackStatus = "sent" | "in_progress" | "resolved"
@@ -52,7 +53,12 @@ const FEEDBACK_PRIORITY_CONFIG: Record<FeedbackPriority, { label: string; color:
   high: { label: "สูง", color: "#f87171" },
 }
 
-export default function FeedbackPage() {
+import { Suspense } from "react"
+
+function FeedbackContent() {
+  const { theme } = useTheme()
+  const isLight = theme === "light"
+  const S = getStyles(isLight)
   const searchParams = useSearchParams()
   const requestedProjectId = Number(searchParams.get("project"))
   const user = getUser() || { id: 0, username: "", role: "customer" as const }
@@ -410,6 +416,7 @@ export default function FeedbackPage() {
                 replying={replying}
                 onStatusChange={handleStatusChange}
                 onComment={handleComment}
+                isLight={isLight}
               />
             )}
           </div>
@@ -423,6 +430,7 @@ export default function FeedbackPage() {
           submitting={creating}
           onClose={() => !creating && setShowCreate(false)}
           onCreate={handleCreate}
+          isLight={isLight}
         />
       )}
     </div>
@@ -438,6 +446,7 @@ function FeedbackDetail({
   replying,
   onStatusChange,
   onComment,
+  isLight = false,
 }: {
   feedback: Feedback
   isAdmin: boolean
@@ -447,7 +456,9 @@ function FeedbackDetail({
   replying: boolean
   onStatusChange: (id: number, status: FeedbackStatus) => void | Promise<void>
   onComment: (id: number, message: string) => void | Promise<void>
+  isLight?: boolean
 }) {
+  const S = getStyles(isLight)
   const [newComment, setNewComment] = useState("")
   const { color: statusColor, label: statusLabel } = FEEDBACK_STATUS_CONFIG[feedback.status]
   const { color: priorityColor, label: priorityLabel } = FEEDBACK_PRIORITY_CONFIG[feedback.priority]
@@ -611,12 +622,21 @@ function FeedbackDetail({
   )
 }
 
+export default function FeedbackPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 32, color: "#94a3b8" }}>กำลังโหลด...</div>}>
+      <FeedbackContent />
+    </Suspense>
+  )
+}
+
 function CreateModal({
   projects,
   initialProjectId,
   submitting,
   onClose,
   onCreate,
+  isLight = false,
 }: {
   projects: Project[]
   initialProjectId?: number
@@ -628,7 +648,9 @@ function CreateModal({
     projectId: number
     priority: FeedbackPriority
   }) => void | Promise<void>
+  isLight?: boolean
 }) {
+  const S = getStyles(isLight)
   const availableProjects = projects
   const firstProjectId =
     availableProjects.find((project) => project.id === initialProjectId)?.id ?? availableProjects[0]?.id ?? 0
@@ -804,41 +826,43 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })
 }
 
-const S: Record<string, CSSProperties> = {
-  page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 16 },
-  title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
-  addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
-  secondaryBtn: { display: "flex", alignItems: "center", gap: 7, background: "#111827", border: "1px solid #374151", borderRadius: 8, color: "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 14px", cursor: "pointer" },
-  roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
-  filterRow: { display: "flex", gap: 10, marginBottom: 14 },
-  contentGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 320px) minmax(0, 1fr)", gap: 14, height: "calc(100vh - 280px)", minHeight: 520 },
-  listPanel: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 },
-  detailPanel: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 },
-  tabBtn: { border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
-  listBody: { flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8 },
-  feedbackItem: { border: "1px solid", borderLeft: "3px solid", borderRadius: 10, padding: "12px 14px", cursor: "pointer", transition: "all 0.15s", width: "100%" },
-  unreadDot: { width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0, marginTop: 2 },
-  badge: { fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" },
-  input: { background: "#0d1117", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" },
-  sendBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  empty: { color: "#374151", fontSize: 13, textAlign: "center", padding: "40px 0", fontStyle: "italic" },
-  loadingBox: { background: "#111827", border: "1px solid #1f2937", borderRadius: 14, color: "#6b7280", padding: 40, textAlign: "center" },
-  errorBox: { color: "#fca5a5", background: "#7f1d1d33", border: "1px solid #ef444455", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 },
-  noSelection: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 },
-  descriptionBox: { fontSize: 13, color: "#9ca3af", lineHeight: 1.6, margin: 0, background: "#0d1117", borderRadius: 8, padding: "12px 14px", whiteSpace: "pre-wrap" },
-  commentsBody: { flex: 1, overflowY: "auto", padding: "16px 24px", display: "flex", flexDirection: "column", gap: 14 },
-  noComments: { color: "#374151", fontSize: 13, textAlign: "center", padding: "32px 0", fontStyle: "italic" },
-  avatar: { width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 },
-  commentInputRow: { padding: "12px 24px", borderTop: "1px solid #1f2937", display: "flex", gap: 10, flexShrink: 0 },
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
-  modal: { background: "#111827", border: "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #1f2937" },
-  modalTitle: { fontSize: 17, fontWeight: 700, color: "#f9fafb" },
-  closeBtn: { background: "transparent", border: "none", color: "#6b7280", fontSize: 16, cursor: "pointer" },
-  modalBody: { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 },
-  modalFooter: { display: "flex", alignItems: "center", padding: "16px 24px", borderTop: "1px solid #1f2937" },
-  saveBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 24px", cursor: "pointer" },
-  cancelBtn: { background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 20px", cursor: "pointer", marginRight: 8 },
+function getStyles(isLight: boolean): Record<string, CSSProperties> {
+  return {
+    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
+    header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 16 },
+    title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
+    subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
+    addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
+    secondaryBtn: { display: "flex", alignItems: "center", gap: 7, background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: isLight ? "#334155" : "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 14px", cursor: "pointer" },
+    roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
+    filterRow: { display: "flex", gap: 10, marginBottom: 14 },
+    contentGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 320px) minmax(0, 1fr)", gap: 14, height: "calc(100vh - 280px)", minHeight: 520 },
+    listPanel: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    detailPanel: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    tabBtn: { border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
+    listBody: { flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8 },
+    feedbackItem: { border: "1px solid", borderLeft: "3px solid", borderRadius: 10, padding: "12px 14px", cursor: "pointer", transition: "all 0.15s", width: "100%" },
+    unreadDot: { width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0, marginTop: 2 },
+    badge: { fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" },
+    input: { background: isLight ? "#f8fafc" : "#0d1117", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" },
+    sendBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+    empty: { color: isLight ? "#94a3b8" : "#374151", fontSize: 13, textAlign: "center", padding: "40px 0", fontStyle: "italic" },
+    loadingBox: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 14, color: isLight ? "#64748b" : "#6b7280", padding: 40, textAlign: "center" },
+    errorBox: { color: isLight ? "#991b1b" : "#fca5a5", background: isLight ? "#fef2f2" : "#7f1d1d33", border: isLight ? "1px solid #fca5a5" : "1px solid #ef444455", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 },
+    noSelection: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12, color: isLight ? "#64748b" : "#9ca3af" },
+    descriptionBox: { fontSize: 13, color: isLight ? "#334155" : "#9ca3af", lineHeight: 1.6, margin: 0, background: isLight ? "#f8fafc" : "#0d1117", border: isLight ? "1px solid #e2e8f0" : "none", borderRadius: 8, padding: "12px 14px", whiteSpace: "pre-wrap" },
+    commentsBody: { flex: 1, overflowY: "auto", padding: "16px 24px", display: "flex", flexDirection: "column", gap: 14 },
+    noComments: { color: isLight ? "#94a3b8" : "#374151", fontSize: 13, textAlign: "center", padding: "32px 0", fontStyle: "italic" },
+    avatar: { width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 },
+    commentInputRow: { padding: "12px 24px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", display: "flex", gap: 10, flexShrink: 0 },
+    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
+    modal: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
+    modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
+    modalTitle: { fontSize: 17, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb" },
+    closeBtn: { background: "transparent", border: "none", color: isLight ? "#64748b" : "#6b7280", fontSize: 16, cursor: "pointer" },
+    modalBody: { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 },
+    modalFooter: { display: "flex", alignItems: "center", padding: "16px 24px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
+    saveBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 24px", cursor: "pointer" },
+    cancelBtn: { background: "transparent", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: isLight ? "#64748b" : "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 20px", cursor: "pointer", marginRight: 8 },
+  }
 }

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { FileText, FileImage, File, Download, Trash2, Upload, Search, FolderOpen, Eye, Lock } from "lucide-react"
 import { getUser } from "@/lib/auth"
 import { backend, normalizeProject } from "@/lib/backend"
+import { useTheme } from "@/lib/themeContext"
 
 export type DocCategory = "contract" | "proposal" | "design" | "credential" | "report" | "other"
 
@@ -64,7 +65,12 @@ function normalizeDocument(file: any): DocumentWithUrl {
   }
 }
 
-export default function DocumentVaultPage() {
+import { Suspense } from "react"
+
+function DocumentsContent() {
+  const { theme } = useTheme()
+  const isLight = theme === "light"
+  const S = getStyles(isLight)
   const searchParams = useSearchParams()
   const requestedProject = searchParams.get("project")
   const user = getUser()
@@ -186,7 +192,7 @@ export default function DocumentVaultPage() {
           return (
             <button key={cat} onClick={() => setFilterCategory(filterCategory === cat ? "all" : cat)}
               style={{ ...S.statCard, borderTopColor: CATEGORY_CONFIG[cat].color, opacity: filterCategory !== "all" && filterCategory !== cat ? 0.4 : 1, cursor: "pointer" }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#f9fafb", fontFamily: "monospace" }}>{count}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", fontFamily: "monospace" }}>{count}</div>
               <div style={{ fontSize: 11, color: CATEGORY_CONFIG[cat].color, fontWeight: 600 }}>{CATEGORY_CONFIG[cat].label}</div>
             </button>
           )
@@ -234,7 +240,8 @@ export default function DocumentVaultPage() {
                           setDocs((prev) => prev.filter((d) => d.id !== doc.id))
                         } catch (err) { setError(err instanceof Error ? err.message : "ลบเอกสารไม่สำเร็จ") }
                       }
-                    }} />
+                    }} 
+                    isLight={isLight} />
                 ))}
               </div>
             </div>
@@ -252,9 +259,10 @@ export default function DocumentVaultPage() {
   )
 }
 
-function DocCard({ doc, isAdmin, onPreview, onDelete }: {
-  doc: DocumentWithUrl; isAdmin: boolean; onPreview: () => void; onDelete: () => void
+function DocCard({ doc, isAdmin, onPreview, onDelete, isLight = false }: {
+  doc: DocumentWithUrl; isAdmin: boolean; onPreview: () => void; onDelete: () => void; isLight?: boolean
 }) {
+  const S = getStyles(isLight)
   const { label, color } = CATEGORY_CONFIG[doc.category]
   const FileIcon = doc.fileType === "image" ? FileImage : doc.fileType === "pdf" ? FileText : File
   return (
@@ -289,12 +297,14 @@ function DocCard({ doc, isAdmin, onPreview, onDelete }: {
   )
 }
 
-function UploadModal({ projects, uploading, onClose, onUpload }: {
+function UploadModal({ projects, uploading, onClose, onUpload, isLight = false }: {
   projects: Project[]
   uploading: boolean
   onClose: () => void
   onUpload: (d: Omit<Document, "id">, file: File) => void
+  isLight?: boolean
 }) {
+  const S = getStyles(isLight)
   const fileRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [form, setForm] = useState({ projectId: projects[0]?.id ?? 0, category: "contract" as DocCategory, isConfidential: false })
@@ -316,9 +326,9 @@ function UploadModal({ projects, uploading, onClose, onUpload }: {
         </div>
         <div style={S.modalBody}>
           <div onClick={() => fileRef.current?.click()}
-            style={{ ...S.dropZone, borderColor: selectedFile ? "#4f8ef7" : "#1f2937", background: selectedFile ? "#0f1f3d" : "#0d1117" }}>
+            style={{ ...S.dropZone, borderColor: selectedFile ? "#4f8ef7" : (isLight ? "#cbd5e1" : "#1f2937"), background: selectedFile ? (isLight ? "#eff6ff" : "#0f1f3d") : (isLight ? "#f8fafc" : "#0d1117") }}>
             <Upload size={22} color={selectedFile ? "#4f8ef7" : "#374151"} />
-            <div style={{ fontSize: 13, color: selectedFile ? "#4f8ef7" : "#4b5563" }}>
+            <div style={{ fontSize: 13, color: selectedFile ? "#4f8ef7" : (isLight ? "#64748b" : "#4b5563") }}>
               {selectedFile ? selectedFile.name : "คลิกเพื่อเลือกไฟล์"}
             </div>
             <input ref={fileRef} type="file" style={{ display: "none" }} onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
@@ -341,7 +351,7 @@ function UploadModal({ projects, uploading, onClose, onUpload }: {
             <input type="checkbox" id="conf" checked={form.isConfidential}
               onChange={(e) => setForm((f) => ({ ...f, isConfidential: e.target.checked }))}
               style={{ accentColor: "#f87171", width: 16, height: 16, cursor: "pointer" }} />
-            <label htmlFor="conf" style={{ fontSize: 13, color: "#9ca3af", cursor: "pointer" }}>เอกสารลับ</label>
+            <label htmlFor="conf" style={{ fontSize: 13, color: isLight ? "#475569" : "#9ca3af", cursor: "pointer" }}>เอกสารลับ</label>
           </div>
         </div>
         <div style={{ ...S.modalFooter, justifyContent: "flex-end" }}>
@@ -362,7 +372,8 @@ function UploadModal({ projects, uploading, onClose, onUpload }: {
   )
 }
 
-function PreviewModal({ doc, projects, onClose }: { doc: DocumentWithUrl; projects: Project[]; onClose: () => void }) {
+function PreviewModal({ doc, projects, onClose, isLight = false }: { doc: DocumentWithUrl; projects: Project[]; onClose: () => void; isLight?: boolean }) {
+  const S = getStyles(isLight)
   const { label, color } = CATEGORY_CONFIG[doc.category]
   const project = projects.find((p) => p.id === doc.projectId)
   const FileIcon = doc.fileType === "image" ? FileImage : doc.fileType === "pdf" ? FileText : File
@@ -408,6 +419,14 @@ function PreviewModal({ doc, projects, onClose }: { doc: DocumentWithUrl; projec
   )
 }
 
+export default function DocumentVaultPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 32, color: "#94a3b8" }}>กำลังโหลด...</div>}>
+      <DocumentsContent />
+    </Suspense>
+  )
+}
+
 function formatDocumentDate(value: string, longFormat: boolean): string {
   if (!value) return "ไม่ระบุ"
 
@@ -424,39 +443,41 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{label}</label>{children}</div>
 }
 
-const S: Record<string, React.CSSProperties> = {
-  page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
-  addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
-  roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
-  statsRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" },
-  statCard: { background: "#111827", border: "1px solid #1f2937", borderTop: "3px solid", borderRadius: 12, padding: "14px 18px", flex: "1 1 100px", display: "flex", flexDirection: "column", gap: 3, transition: "opacity 0.2s" },
-  filterRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" },
-  searchInput: { background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 14px", color: "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
-  select: { background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: "#f9fafb", fontSize: 13, outline: "none", cursor: "pointer" },
-  groupHeader: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: "#9ca3af", marginBottom: 12 },
-  groupCount: { fontSize: 11, color: "#4b5563", marginLeft: 4 },
-  docGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 },
-  docCard: { background: "#111827", border: "1px solid #1f2937", borderRadius: 12, padding: "16px", display: "flex", flexDirection: "column", gap: 6 },
-  fileIcon: { width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" },
-  confBadge: { display: "flex", alignItems: "center", gap: 3, background: "#f871711a", border: "1px solid #f8717133", borderRadius: 999, padding: "2px 7px", color: "#f87171", fontSize: 10, fontWeight: 700 },
-  docName: { fontSize: 12, fontWeight: 600, color: "#f9fafb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
-  catBadge: { fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999 },
-  docMeta: { display: "flex", justifyContent: "space-between", fontSize: 11, color: "#374151", marginTop: 2 },
-  docActions: { display: "flex", gap: 6, marginTop: 4, paddingTop: 8, borderTop: "1px solid #1a2232" },
-  actionBtn: { background: "#1f2937", border: "1px solid #374151", borderRadius: 6, color: "#9ca3af", padding: "5px 8px", cursor: "pointer", display: "flex", alignItems: "center" },
-  empty: { color: "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
-  modal: { background: "#111827", border: "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 460, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #1f2937" },
-  modalTitle: { fontSize: 17, fontWeight: 700, color: "#f9fafb" },
-  closeBtn: { background: "transparent", border: "none", color: "#6b7280", fontSize: 16, cursor: "pointer" },
-  modalBody: { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 },
-  modalFooter: { display: "flex", alignItems: "center", padding: "16px 24px", borderTop: "1px solid #1f2937" },
-  input: { background: "#0d1117", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
-  dropZone: { border: "2px dashed", borderRadius: 12, padding: "28px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", transition: "all 0.2s" },
-  saveBtn: { display: "flex", alignItems: "center", background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 20px", cursor: "pointer" },
-  cancelBtn: { background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer", marginRight: 8 },
+function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+  return {
+    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
+    header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+    title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
+    subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
+    addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
+    roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
+    statsRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" },
+    statCard: { background: isLight ? "#ffffff" : "#111827", borderLeft: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRight: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderTopWidth: 3, borderTopStyle: "solid", borderRadius: 12, padding: "14px 18px", flex: "1 1 100px", display: "flex", flexDirection: "column", gap: 3, transition: "opacity 0.2s", boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    filterRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" },
+    searchInput: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 14px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
+    select: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", cursor: "pointer" },
+    groupHeader: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: isLight ? "#334155" : "#9ca3af", marginBottom: 12 },
+    groupCount: { fontSize: 11, color: isLight ? "#64748b" : "#4b5563", marginLeft: 4 },
+    docGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 },
+    docCard: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 12, padding: "16px", display: "flex", flexDirection: "column", gap: 6, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    fileIcon: { width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" },
+    confBadge: { display: "flex", alignItems: "center", gap: 3, background: "#f871711a", border: "1px solid #f8717133", borderRadius: 999, padding: "2px 7px", color: "#f87171", fontSize: 10, fontWeight: 700 },
+    docName: { fontSize: 12, fontWeight: 600, color: isLight ? "#0f172a" : "#f9fafb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
+    catBadge: { fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999 },
+    docMeta: { display: "flex", justifyContent: "space-between", fontSize: 11, color: isLight ? "#64748b" : "#374151", marginTop: 2 },
+    docActions: { display: "flex", gap: 6, marginTop: 4, paddingTop: 8, borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1a2232" },
+    actionBtn: { background: isLight ? "#f1f5f9" : "#1f2937", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 6, color: isLight ? "#334155" : "#9ca3af", padding: "5px 8px", cursor: "pointer", display: "flex", alignItems: "center" },
+    empty: { color: isLight ? "#94a3b8" : "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
+    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
+    modal: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 460, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
+    modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
+    modalTitle: { fontSize: 17, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb" },
+    closeBtn: { background: "transparent", border: "none", color: isLight ? "#64748b" : "#6b7280", fontSize: 16, cursor: "pointer" },
+    modalBody: { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 },
+    modalFooter: { display: "flex", alignItems: "center", padding: "16px 24px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
+    input: { background: isLight ? "#f8fafc" : "#0d1117", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
+    dropZone: { border: "2px dashed", borderRadius: 12, padding: "28px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", transition: "all 0.2s" },
+    saveBtn: { display: "flex", alignItems: "center", background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 20px", cursor: "pointer" },
+    cancelBtn: { background: "transparent", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: isLight ? "#64748b" : "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer", marginRight: 8 },
+  }
 }

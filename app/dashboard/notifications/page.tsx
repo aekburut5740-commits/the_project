@@ -1,9 +1,10 @@
-﻿"use client"
+"use client"
 
 import React, { useEffect, useMemo, useState } from "react"
 import { Bell, Trash2, CheckCheck } from "lucide-react"
 import { getUser } from "@/lib/auth"
 import { backend } from "@/lib/backend"
+import { useTheme } from "@/lib/themeContext"
 
 interface NotificationItem {
   id: number
@@ -15,6 +16,9 @@ interface NotificationItem {
 }
 
 export default function NotificationsPage() {
+  const { theme } = useTheme()
+  const isLight = theme === "light"
+  const S = getStyles(isLight)
   const user = getUser()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -118,10 +122,10 @@ export default function NotificationsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {grouped.today.length > 0 && (
-            <NotificationGroup title="วันนี้" items={grouped.today} onMarkRead={handleMarkRead} onDelete={handleDelete} />
+            <NotificationGroup title="วันนี้" items={grouped.today} onMarkRead={handleMarkRead} onDelete={handleDelete} isLight={isLight} />
           )}
           {grouped.earlier.length > 0 && (
-            <NotificationGroup title="ก่อนหน้า" items={grouped.earlier} onMarkRead={handleMarkRead} onDelete={handleDelete} />
+            <NotificationGroup title="ก่อนหน้า" items={grouped.earlier} onMarkRead={handleMarkRead} onDelete={handleDelete} isLight={isLight} />
           )}
         </div>
       )}
@@ -129,12 +133,14 @@ export default function NotificationsPage() {
   )
 }
 
-function NotificationGroup({ title, items, onMarkRead, onDelete }: {
+function NotificationGroup({ title, items, onMarkRead, onDelete, isLight = false }: {
   title: string
   items: NotificationItem[]
   onMarkRead: (id: number) => void
   onDelete: (id: number) => void
+  isLight?: boolean
 }) {
+  const S = getStyles(isLight)
   return (
     <div>
       <div style={S.groupLabel}>{title}</div>
@@ -165,95 +171,99 @@ function NotificationGroup({ title, items, onMarkRead, onDelete }: {
   )
 }
 
-const S: Record<string, React.CSSProperties> = {
-  page: {
-    background: "#0d1117",
-    minHeight: "100vh",
-    padding: "28px 32px",
-    fontFamily: "'DM Sans','Segoe UI',sans-serif",
-    color: "#e5e7eb",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
-  markAllBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    background: "#1f2937",
-    border: "1px solid #374151",
-    borderRadius: 8,
-    color: "#9ca3af",
-    fontSize: 13,
-    fontWeight: 600,
-    padding: "8px 16px",
-    cursor: "pointer",
-  },
-  groupLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#4b5563",
-    letterSpacing: "0.08em",
-    textTransform: "uppercase" as const,
-    marginBottom: 10,
-  },
-  notifCard: {
-    border: "1px solid #1f2937",
-    borderRadius: 14,
-    padding: "14px 16px",
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    background: "#111827",
-  },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "rgba(79, 142, 247, 0.15)",
-    color: "#4f8ef7",
-    flexShrink: 0,
-  },
-  notifTitle: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: "#f9fafb",
-    marginBottom: 6,
-  },
-  notifMeta: {
-    fontSize: 12,
-    color: "#9ca3af",
-  },
-  actions: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 8,
-    alignItems: "flex-end",
-  },
-  actionBtn: {
-    background: "transparent",
-    border: "none",
-    color: "#9ca3af",
-    cursor: "pointer",
-    padding: 6,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "80px 0",
-  },
+function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+  return {
+    page: {
+      background: isLight ? "#f8fafc" : "#0d1117",
+      minHeight: "100vh",
+      padding: "28px 32px",
+      fontFamily: "'DM Sans','Segoe UI',sans-serif",
+      color: isLight ? "#0f172a" : "#e5e7eb",
+    },
+    header: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
+    subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
+    markAllBtn: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7,
+      background: isLight ? "#ffffff" : "#1f2937",
+      border: isLight ? "1px solid #cbd5e1" : "1px solid #374151",
+      borderRadius: 8,
+      color: isLight ? "#334155" : "#9ca3af",
+      fontSize: 13,
+      fontWeight: 600,
+      padding: "8px 16px",
+      cursor: "pointer",
+    },
+    groupLabel: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: isLight ? "#64748b" : "#4b5563",
+      letterSpacing: "0.08em",
+      textTransform: "uppercase" as const,
+      marginBottom: 10,
+    },
+    notifCard: {
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      borderRadius: 14,
+      padding: "14px 16px",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      background: isLight ? "#ffffff" : "#111827",
+      boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+    },
+    iconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(79, 142, 247, 0.15)",
+      color: "#4f8ef7",
+      flexShrink: 0,
+    },
+    notifTitle: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: isLight ? "#0f172a" : "#f9fafb",
+      marginBottom: 6,
+    },
+    notifMeta: {
+      fontSize: 12,
+      color: isLight ? "#64748b" : "#9ca3af",
+    },
+    actions: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 8,
+      alignItems: "flex-end",
+    },
+    actionBtn: {
+      background: "transparent",
+      border: "none",
+      color: isLight ? "#64748b" : "#9ca3af",
+      cursor: "pointer",
+      padding: 6,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 8,
+    },
+    emptyState: {
+      display: "flex",
+      flexDirection: "column" as const,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "80px 0",
+      color: isLight ? "#94a3b8" : "#4b5563",
+    },
+  }
 }

@@ -38,6 +38,7 @@ export interface CreateProjectInput {
   name: string
   description: string
   domain?: string
+  website?: string
   start_date?: string
   package?: string
   token?: string
@@ -48,6 +49,7 @@ export interface UpdateProjectInput {
   description?: string
   status?: ProjectStatus
   domain?: string
+  website?: string
   start_date?: string
   package?: string
   token?: string

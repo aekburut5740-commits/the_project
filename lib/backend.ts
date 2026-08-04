@@ -77,6 +77,7 @@ projectMembers: (projectId: number) =>
   updateFeedbackStatus: (id: number, status: string) => apiFetch(`/api/admin/feedbacks/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   feedbackReplies: (id: number) => apiFetch<any[]>(`/api/feedbacks/${id}/replies`),
   createFeedbackReply: (id: number, message: string) => apiFetch(`/api/feedbacks/${id}/replies`, { method: "POST", body: JSON.stringify({ message }) }),
+  markFeedbackRead: (id: number) => apiFetch(`/api/feedbacks/${id}/read`, { method: "PATCH" }),
   reports: (admin = false) => apiFetch(admin ? "/api/admin/reports" : "/api/reports"),
   users: () => apiFetch<any[]>("/api/admin/users"),
   maintenance: () => apiFetch<any>("/api/maintenance"),
@@ -93,7 +94,14 @@ projectMembers: (projectId: number) =>
   createComment: (projectId: number, content: string) => apiFetch(`/api/projects/${projectId}/comments`, { method: "POST", body: JSON.stringify({ content }) }),
   deleteComment: (id: number) => apiFetch(`/api/comments/${id}`, { method: "DELETE" }),
   projectLogs: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/logs`),
-  gitPulse: () => apiFetch<any>("/api/gitpulse"),
+  gitPulse: (repo?: string, token?: string) =>
+    apiFetch<any>(
+      repo
+        ? `/api/gitpulse?repo=${encodeURIComponent(repo)}${token ? `&token=${encodeURIComponent(token)}` : ""}`
+        : "/api/gitpulse"
+    ),
+  guestPreview: (token: string) => apiFetch<any>(`/api/guest/preview/${token}`),
+  generateShareToken: (id: number) => apiFetch<any>(`/api/admin/projects/${id}/share-token`, { method: "POST" }),
   register: (body: {username: string, email: string, password: string}) =>apiFetch("/api/register", {method: "POST",body: JSON.stringify(body)}),
   login: (body: {
   username: string
@@ -112,14 +120,17 @@ projectMembers: (projectId: number) =>
 
 
 export function normalizeProject(project: any): Project {
-  const domain = String(
-    project.domain ??
-    project.website ??
-    ""
-  )
+  const domain = String(project.domain ?? "")
+  let rawWebsite = String(project.website ?? "").trim()
+  const id = Number(project.id)
+  
+  if (!rawWebsite || rawWebsite === "https://example.com" || rawWebsite === "example.com") {
+    const currentOrigin = typeof window !== "undefined" ? window.location.origin : ""
+    rawWebsite = currentOrigin ? `${currentOrigin}/dashboard/projects/${id}` : `/dashboard/projects/${id}`
+  }
 
   return {
-    id: Number(project.id),
+    id,
 
     name: String(project.name ?? ""),
     description: String(project.description ?? ""),
@@ -148,7 +159,7 @@ export function normalizeProject(project: any): Project {
       undefined,
 
     domain,
-    website: domain,
+    website: rawWebsite,
 
     startDate: String(
       project.startDate ??

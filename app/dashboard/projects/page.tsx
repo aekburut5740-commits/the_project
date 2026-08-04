@@ -16,21 +16,35 @@ import {
 } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
 
+import { useTheme } from "@/lib/themeContext"
+
 const PACKAGES = ["Starter", "Professional", "Enterprise"]
 
 export default function ProjectsPage() {
-  const user = getUser() || { id: 0, username: "", role: "customer" as const }
-  const isAdmin = user.role === "admin"
+  const { theme } = useTheme()
+  const isLight = theme === "light"
+  const S = getStyles(isLight)
+
+  const [user, setUser] = useState<{ id: number; username: string; role: "admin" | "customer" }>({ id: 0, username: "", role: "customer" })
+  const [isAdmin, setIsAdmin] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
-  async function loadProjects() {
+  useEffect(() => {
+    const currentUser = getUser() || { id: 0, username: "", role: "customer" as const }
+    setUser(currentUser)
+    const adminState = currentUser.role === "admin"
+    setIsAdmin(adminState)
+    void loadProjects(adminState)
+  }, [])
+
+  async function loadProjects(adminRole = isAdmin) {
     setLoading(true)
     setError("")
 
     try {
-      const rows = await backend.projects(isAdmin)
+      const rows = await backend.projects(adminRole)
 
       const nextProjects = await Promise.all(
         rows.map(async (row) => {
@@ -67,9 +81,6 @@ export default function ProjectsPage() {
     }
   }
 
-  useEffect(() => {
-    loadProjects()
-  }, [isAdmin])
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | "all">("all")
   const [editingProject, setEditingProject] = useState<Project | null>(null)
@@ -82,14 +93,23 @@ export default function ProjectsPage() {
     return matchSearch && matchStatus
   })
 
+  async function addNewManagers(projectId: number, managers: Manager[]) {
+    const created = await Promise.all(managers.filter((manager) => manager.name.trim()).map((manager) => backend.addProjectMember(projectId, manager.name)))
+    return created.map(normalizeManager)
+  }
+
   async function handleSave(updated: Project) {
     setError("")
     try {
       if (isCreating) {
         const created = normalizeProject(await backend.createProject({
-          name: updated.name, description: updated.description,
-          domain: updated.domain || updated.website, start_date: updated.startDate,
-          package: updated.package, token: updated.token,
+          name: updated.name,
+          description: updated.description,
+          domain: updated.domain,
+          website: updated.website,
+          start_date: updated.startDate,
+          package: updated.package,
+          token: updated.token,
         })) as Project
         const managers = isAdmin ? await addNewManagers(created.id, updated.managers) : []
         setProjects((prev) => [...prev, { ...created, managers }])
@@ -97,17 +117,26 @@ export default function ProjectsPage() {
         const old = projects.find((project) => project.id === updated.id)
         if (isAdmin) {
           await backend.updateProject(updated.id, {
-            name: updated.name, description: updated.description, status: updated.status,
-            domain: updated.domain || updated.website, start_date: updated.startDate,
-            package: updated.package, token: updated.token,
+            name: updated.name,
+            description: updated.description,
+            status: updated.status,
+            domain: updated.domain,
+            website: updated.website,
+            start_date: updated.startDate,
+            package: updated.package,
+            token: updated.token,
           }, true)
           await backend.updateProgress(updated.id, updated.progress)
           await syncManagers(updated.id, old?.managers || [], updated.managers)
         } else {
           await backend.updateProject(updated.id, {
-            name: updated.name, description: updated.description,
-            domain: updated.domain || updated.website, start_date: updated.startDate,
-            package: updated.package, token: updated.token,
+            name: updated.name,
+            description: updated.description,
+            domain: updated.domain,
+            website: updated.website,
+            start_date: updated.startDate,
+            package: updated.package,
+            token: updated.token,
           })
         }
         await loadProjects()
@@ -185,30 +214,27 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div style={S.grid}>
-          {filtered.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              isAdmin={isAdmin}
-              onEdit={() => {
-                setIsCreating(false)
-                setEditingProject(project)
-              }}
-            />
+          {filtered.map((p) => (
+            <ProjectCard key={p.id} project={p} isAdmin={isAdmin} onEdit={() => { setIsCreating(false); setEditingProject(p) }} isLight={isLight} />
           ))}
         </div>
       )}
 
-      {editingProject && isAdmin && (
+      {filtered.length === 0 && !loading && (
+        <div style={S.empty}>ไม่พบโปรเจคที่ตรงกับเงื่อนไข</div>
+      )}
+
+      {editingProject && (
         <EditModal project={editingProject} isCreating={isCreating}
           onClose={() => { setEditingProject(null); setIsCreating(false) }}
-          onSave={handleSave} onDelete={handleDelete} />
+          onSave={handleSave} onDelete={handleDelete} isLight={isLight} />
       )}
     </div>
   )
 }
 
-function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmin: boolean; onEdit: () => void }) {
+function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project: Project; isAdmin: boolean; onEdit: () => void; isLight?: boolean }) {
+  const S = getStyles(isLight)
   const statusConfig = STATUS_CONFIG[p.status] || {
     label: p.status || "ไม่ระบุสถานะ",
     color: "#6b7280",
@@ -290,10 +316,11 @@ function ProjectCard({ project: p, isAdmin, onEdit }: { project: Project; isAdmi
   )
 }
 
-function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
+function EditModal({ project, isCreating, onClose, onSave, onDelete, isLight = false }: {
   project: Project; isCreating: boolean
-  onClose: () => void; onSave: (p: Project) => void; onDelete: (id: number) => void
+  onClose: () => void; onSave: (p: Project) => void; onDelete: (id: number) => void; isLight?: boolean
 }) {
+  const S = getStyles(isLight)
   const [form, setForm] = useState<Project>({ ...project, managers: project.managers.map((manager) => ({ ...manager })) })
 
   function set(key: keyof Project, value: any) { setForm((prev) => ({ ...prev, [key]: value })) }
@@ -343,21 +370,21 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
         </div>
         <div style={S.modalBody}>
           <SLabel label="ข้อมูลหลัก" />
-          <Field label="ชื่อโปรเจค"><Input value={form.name} onChange={(v) => set("name", v)} /></Field>
-          <Field label="เว็บไซต์"><Input value={form.website} onChange={(v) => set("website", v)} placeholder="example.com" /></Field>
-          <Field label="คำอธิบาย"><textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} style={{ ...S.input, resize: "vertical" }} /></Field>
+          <Field label="ชื่อโปรเจค" isLight={isLight}><Input value={form.name} onChange={(v) => set("name", v)} isLight={isLight} /></Field>
+          <Field label="คำอธิบาย" isLight={isLight}><textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} style={{ ...S.input, resize: "vertical" }} /></Field>
+          <Field label="Website URL (ลิงก์เปิดหน้างานจริง)" isLight={isLight}><Input value={form.website || ""} onChange={(v) => set("website", v)} placeholder="เช่น http://localhost:3000 หรือ https://example.com" isLight={isLight} /></Field>
           <SLabel label="สถานะและความคืบหน้า" />
-          <Field label="สถานะ">
+          <Field label="สถานะ" isLight={isLight}>
             <select value={form.status} onChange={(e) => set("status", e.target.value)} style={S.input}>
               <option value="pending">รอดำเนินการ</option>
               <option value="in_progress">กำลังดำเนินการ</option>
               <option value="completed">เสร็จแล้ว</option>
             </select>
           </Field>
-          <Field label={`ความคืบหน้า (${form.progress}%)`}>
+          <Field label={`ความคืบหน้า (${form.progress}%)`} isLight={isLight}>
             <input type="range" min={0} max={100} value={form.progress} onChange={(e) => set("progress", Number(e.target.value))} style={{ width: "100%", accentColor: "#4f8ef7" }} />
           </Field>
-          <Field label="วันที่เริ่ม"><Input type="date" value={form.startDate} onChange={(v) => set("startDate", v)} /></Field>
+          <Field label="วันที่เริ่ม" isLight={isLight}><Input type="date" value={form.startDate} onChange={(v) => set("startDate", v)} isLight={isLight} /></Field>
           <SLabel label="ผู้ดูแลโปรเจค" />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {form.managers.map((manager, index) => (
@@ -373,14 +400,14 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
             ))}
             <button onClick={addManager} style={S.addManagerBtn}>+ เพิ่มผู้ดูแล</button>
           </div>
-          <SLabel label="ข้อมูลเทคนิค" />
-          <Field label="แพ็กเกจ">
+          <SLabel label="ข้อมูลเทคนิค (Git & Package)" />
+          <Field label="แพ็กเกจ" isLight={isLight}>
             <select value={form.package} onChange={(e) => set("package", e.target.value)} style={S.input}>
               {PACKAGES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </Field>
-          <Field label="Domain"><Input value={form.domain} onChange={(v) => set("domain", v)} /></Field>
-          <Field label="Token"><Input value={form.token} onChange={(v) => set("token", v)} /></Field>
+          <Field label="Git Repo / Domain (เช่น owner/repo)" isLight={isLight}><Input value={form.domain} onChange={(v) => set("domain", v)} placeholder="เช่น chalanon/wtemsuk หรือ aekburut5740-commits/the_project" isLight={isLight} /></Field>
+          <Field label="Token / GitHub Secret" isLight={isLight}><Input value={form.token} onChange={(v) => set("token", v)} placeholder="เช่น ghp_xxxx หรือ Token ประจำโปรเจค" isLight={isLight} /></Field>
         </div>
         <div style={{ ...S.modalFooter, justifyContent: isCreating ? "flex-end" : "space-between" }}>
           {!isCreating && <button onClick={() => { if (confirm("ลบโปรเจคนี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบโปรเจค</button>}
@@ -397,16 +424,29 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete }: {
 function SLabel({ label }: { label: string }) {
   return <div style={{ fontSize: 11, fontWeight: 700, color: "#4f8ef7", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginTop: 4 }}>{label}</div>
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{label}</label>{children}</div>
+function Field({ label, children, isLight = false }: { label: string; children: React.ReactNode; isLight?: boolean }) {
+  return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={{ fontSize: 12, color: isLight ? "#64748b" : "#9ca3af", fontWeight: 600 }}>{label}</label>{children}</div>
 }
-function Input({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
-  return <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={S.input} />
-}
-
-async function addNewManagers(projectId: number, managers: Manager[]) {
-  const created = await Promise.all(managers.filter((manager) => manager.name.trim()).map((manager) => backend.addProjectMember(projectId, manager.name)))
-  return created.map(normalizeManager)
+function Input({ value, onChange, placeholder, type = "text", isLight = false }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string; isLight?: boolean }) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        background: isLight ? "#ffffff" : "#0d1117",
+        border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937",
+        borderRadius: 8,
+        padding: "9px 12px",
+        color: isLight ? "#0f172a" : "#f9fafb",
+        fontSize: 13,
+        outline: "none",
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    />
+  )
 }
 
 async function syncManagers(projectId: number, previous: Manager[], next: Manager[]) {
@@ -426,77 +466,58 @@ function getInitials(name: string) {
 }
 
 function formatProjectDate(value: string): string {
-  if (!value) {
-    return "ยังไม่กำหนด"
-  }
-
+  if (!value) return "ยังไม่กำหนด"
   const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return "ยังไม่กำหนด"
-  }
-
-  return date.toLocaleDateString("th-TH", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })
+  if (Number.isNaN(date.getTime())) return "ยังไม่กำหนด"
+  return date.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })
 }
 
 function normalizeWebsiteUrl(value: string): string {
   const website = value.trim()
-
-  if (!website) {
-    return ""
-  }
-
-  if (
-    website.startsWith("http://") ||
-    website.startsWith("https://")
-  ) {
-    return website
-  }
-
+  if (!website) return ""
+  if (website.startsWith("http://") || website.startsWith("https://")) return website
   return `https://${website}`
 }
 
-const S: Record<string, React.CSSProperties> = {
-  page: { background: "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: "#e5e7eb" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
-  addBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
-  roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
-  filterRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" },
-  searchInput: { background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 14px", color: "#f9fafb", fontSize: 13, outline: "none", width: 220 },
-  tabGroup: { display: "flex", gap: 4, background: "#111827", border: "1px solid #1f2937", borderRadius: 8, padding: 4 },
-  tabBtn: { border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 },
-  card: { background: "#111827", border: "1px solid #8b8b8b", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 },
-  cardName: { fontSize: 16, fontWeight: 700, color: "#f9fafb", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
-  cardWebsite: { fontSize: 12, color: "#4f8ef7", textDecoration: "none", marginTop: 2, display: "block" },
-  cardDesc: { fontSize: 13, color: "#6b7280", lineHeight: 1.6, margin: 0 },
-  badge: { fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" as const, flexShrink: 0 },
-  progressTrack: { background: "#1f2937", borderRadius: 999, height: 6, overflow: "hidden" },
-  progressFill: { height: "100%", borderRadius: 999, transition: "width 0.4s ease" },
-  metaRow: { display: "flex", gap: 16 },
-  metaItem: { display: "flex", flexDirection: "column", gap: 2 },
-  metaLabel: { fontSize: 11, color: "#4b5563", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em" },
-  metaValue: { fontSize: 13, color: "#d1d5db", fontWeight: 600 },
-  editBtn: { background: "#1f2937", border: "1px solid #374151", borderRadius: 7, color: "#9ca3af", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" },
-  addManagerBtn: { background: "#1f2937", border: "1px solid #374151", borderRadius: 8, color: "#4f8ef7", fontSize: 12, fontWeight: 600, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start" },
-  removeBtn: { background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#f87171", fontSize: 12, fontWeight: 600, padding: "8px 10px", cursor: "pointer" },
-  empty: { color: "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
-  modal: { background: "#111827", border: "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid #1f2937" },
-  modalTitle: { fontSize: 17, fontWeight: 700, color: "#f9fafb" },
-  modalSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  closeBtn: { background: "transparent", border: "none", color: "#6b7280", fontSize: 16, cursor: "pointer" },
-  modalBody: { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 },
-  modalFooter: { display: "flex", alignItems: "center", padding: "16px 24px", borderTop: "1px solid #1f2937" },
-  input: { background: "#0d1117", border: "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
-  saveBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 24px", cursor: "pointer" },
-  cancelBtn: { background: "transparent", border: "1px solid #374151", borderRadius: 8, color: "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 20px", cursor: "pointer" },
-  deleteBtn: { background: "#1f1215", border: "1px solid #450a0a", borderRadius: 8, color: "#f87171", fontSize: 13, fontWeight: 600, padding: "9px 16px", cursor: "pointer" },
+function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+  return {
+    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
+    header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+    title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
+    subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
+    addBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
+    roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
+    filterRow: { display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" },
+    searchInput: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 14px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", width: 220 },
+    tabGroup: { display: "flex", gap: 4, background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: 4 },
+    tabBtn: { border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 },
+    card: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #8b8b8b", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    cardName: { fontSize: 16, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
+    cardWebsite: { fontSize: 12, color: "#4f8ef7", textDecoration: "none", marginTop: 2, display: "block" },
+    cardDesc: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", lineHeight: 1.6, margin: 0 },
+    badge: { fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" as const, flexShrink: 0 },
+    progressTrack: { background: isLight ? "#e2e8f0" : "#1f2937", borderRadius: 999, height: 6, overflow: "hidden" },
+    progressFill: { height: "100%", borderRadius: 999, transition: "width 0.4s ease" },
+    metaRow: { display: "flex", gap: 16 },
+    metaItem: { display: "flex", flexDirection: "column", gap: 2 },
+    metaLabel: { fontSize: 11, color: isLight ? "#64748b" : "#4b5563", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.05em" },
+    metaValue: { fontSize: 13, color: isLight ? "#1e293b" : "#d1d5db", fontWeight: 600 },
+    editBtn: { background: isLight ? "#f1f5f9" : "#1f2937", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 7, color: isLight ? "#334155" : "#9ca3af", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" },
+    addManagerBtn: { background: isLight ? "#f1f5f9" : "#1f2937", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: "#4f8ef7", fontSize: 12, fontWeight: 600, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start" },
+    removeBtn: { background: "transparent", border: isLight ? "1px solid #fca5a5" : "1px solid #374151", borderRadius: 8, color: "#f87171", fontSize: 12, fontWeight: 600, padding: "8px 10px", cursor: "pointer" },
+    empty: { color: isLight ? "#94a3b8" : "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
+    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
+    modal: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
+    modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
+    modalTitle: { fontSize: 17, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb" },
+    modalSub: { fontSize: 12, color: isLight ? "#64748b" : "#6b7280", marginTop: 2 },
+    closeBtn: { background: "transparent", border: "none", color: isLight ? "#64748b" : "#6b7280", fontSize: 16, cursor: "pointer" },
+    modalBody: { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 },
+    modalFooter: { display: "flex", alignItems: "center", padding: "16px 24px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
+    input: { background: isLight ? "#ffffff" : "#0d1117", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", width: "100%", boxSizing: "border-box" as const },
+    saveBtn: { background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 24px", cursor: "pointer" },
+    cancelBtn: { background: "transparent", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: isLight ? "#64748b" : "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 20px", cursor: "pointer" },
+    deleteBtn: { background: isLight ? "#fef2f2" : "#1f1215", border: "1px solid #ef444444", borderRadius: 8, color: "#f87171", fontSize: 13, fontWeight: 600, padding: "9px 16px", cursor: "pointer" },
+  }
 }

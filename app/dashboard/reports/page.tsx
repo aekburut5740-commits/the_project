@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { getUser } from "@/lib/auth"
 import { backend, normalizeProject } from "@/lib/backend"
+import { useTheme } from "@/lib/themeContext"
 
 type ProjectStatus = "pending" | "in_progress" | "completed" | "on_hold" | string
 type MilestoneStatus = "upcoming" | "in_progress" | "completed" | "overdue" | string
@@ -75,148 +76,151 @@ const FEEDBACK_STATUS: Record<string, { label: string; color: string }> = {
   completed: { label: "เสร็จสิ้น", color: "#34d399" },
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    padding: "28px 32px",
-    background: "#0b1220",
-    color: "#e5e7eb",
-    fontFamily: "'Inter', 'Segoe UI', sans-serif",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    flexWrap: "wrap",
-    marginBottom: 22,
-  },
-  title: {
-    margin: 0,
-    color: "#f9fafb",
-    fontSize: 30,
-    fontWeight: 800,
-    letterSpacing: "-0.03em",
-  },
-  subtitle: {
-    margin: "7px 0 0",
-    color: "#94a3b8",
-    fontSize: 14,
-    lineHeight: 1.7,
-    maxWidth: 720,
-  },
-  buttonRow: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  button: {
-    minHeight: 42,
-    padding: "0 15px",
-    borderRadius: 10,
-    border: "1px solid #334155",
-    background: "#111827",
-    color: "#e5e7eb",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  primaryButton: {
-    minHeight: 42,
-    padding: "0 15px",
-    borderRadius: 10,
-    border: "1px solid #4f8ef7",
-    background: "#2563eb",
-    color: "#ffffff",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  filterCard: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-    padding: 16,
-    marginBottom: 18,
-    borderRadius: 14,
-    border: "1px solid #1f2937",
-    background: "#111827",
-  },
-  select: {
-    minWidth: 260,
-    height: 42,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: "1px solid #334155",
-    background: "#0b1220",
-    color: "#f8fafc",
-    outline: "none",
-  },
-  summaryGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-    gap: 14,
-    marginBottom: 18,
-  },
-  statCard: {
-    borderRadius: 16,
-    border: "1px solid #1f2937",
-    background: "#111827",
-    padding: 18,
-    boxShadow: "0 10px 26px rgba(0,0,0,0.16)",
-  },
-  statTitle: {
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: 800,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  statValue: {
-    color: "#f8fafc",
-    fontSize: 30,
-    fontWeight: 800,
-    marginTop: 10,
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
-    gap: 18,
-    alignItems: "start",
-  },
-  card: {
-    borderRadius: 16,
-    border: "1px solid #1f2937",
-    background: "#111827",
-    padding: 20,
-    boxShadow: "0 10px 26px rgba(0,0,0,0.14)",
-  },
-  cardTitle: {
-    margin: "0 0 16px",
-    color: "#f8fafc",
-    fontSize: 17,
-    fontWeight: 800,
-  },
-  item: {
-    borderRadius: 13,
-    border: "1px solid #1f2937",
-    background: "#0f172a",
-    padding: 15,
-  },
-  empty: {
-    padding: "30px 20px",
-    textAlign: "center",
-    color: "#64748b",
-    borderRadius: 12,
-    border: "1px dashed #334155",
-  },
-  error: {
-    marginBottom: 16,
-    padding: "12px 14px",
-    borderRadius: 10,
-    border: "1px solid rgba(248,113,113,0.4)",
-    background: "rgba(127,29,29,0.22)",
-    color: "#fecaca",
-  },
+function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+  return {
+    page: {
+      minHeight: "100vh",
+      padding: "28px 32px",
+      background: isLight ? "#f8fafc" : "#0b1220",
+      color: isLight ? "#0f172a" : "#e5e7eb",
+      fontFamily: "'Inter', 'Segoe UI', sans-serif",
+    },
+    header: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      gap: 16,
+      flexWrap: "wrap",
+      marginBottom: 22,
+    },
+    title: {
+      margin: 0,
+      color: isLight ? "#0f172a" : "#f9fafb",
+      fontSize: 30,
+      fontWeight: 800,
+      letterSpacing: "-0.03em",
+    },
+    subtitle: {
+      margin: "7px 0 0",
+      color: isLight ? "#64748b" : "#94a3b8",
+      fontSize: 14,
+      lineHeight: 1.7,
+      maxWidth: 720,
+    },
+    buttonRow: {
+      display: "flex",
+      gap: 10,
+      flexWrap: "wrap",
+    },
+    button: {
+      minHeight: 42,
+      padding: "0 15px",
+      borderRadius: 10,
+      border: isLight ? "1px solid #cbd5e1" : "1px solid #334155",
+      background: isLight ? "#ffffff" : "#111827",
+      color: isLight ? "#334155" : "#e5e7eb",
+      fontWeight: 700,
+      cursor: "pointer",
+    },
+    primaryButton: {
+      minHeight: 42,
+      padding: "0 15px",
+      borderRadius: 10,
+      border: "1px solid #4f8ef7",
+      background: "#2563eb",
+      color: "#ffffff",
+      fontWeight: 700,
+      cursor: "pointer",
+    },
+    filterCard: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      flexWrap: "wrap",
+      padding: 16,
+      marginBottom: 18,
+      borderRadius: 14,
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      background: isLight ? "#ffffff" : "#111827",
+      boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+    },
+    select: {
+      minWidth: 260,
+      height: 42,
+      padding: "0 12px",
+      borderRadius: 10,
+      border: isLight ? "1px solid #cbd5e1" : "1px solid #334155",
+      background: isLight ? "#ffffff" : "#0b1220",
+      color: isLight ? "#0f172a" : "#f8fafc",
+      outline: "none",
+    },
+    summaryGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+      gap: 14,
+      marginBottom: 18,
+    },
+    statCard: {
+      borderRadius: 16,
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      background: isLight ? "#ffffff" : "#111827",
+      padding: 18,
+      boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "0 10px 26px rgba(0,0,0,0.16)",
+    },
+    statTitle: {
+      color: isLight ? "#64748b" : "#94a3b8",
+      fontSize: 12,
+      fontWeight: 800,
+      textTransform: "uppercase",
+      letterSpacing: "0.08em",
+    },
+    statValue: {
+      color: isLight ? "#0f172a" : "#f8fafc",
+      fontSize: 30,
+      fontWeight: 800,
+      marginTop: 10,
+    },
+    grid: {
+      display: "grid",
+      gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
+      gap: 18,
+      alignItems: "start",
+    },
+    card: {
+      borderRadius: 16,
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      background: isLight ? "#ffffff" : "#111827",
+      padding: 20,
+      boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "0 10px 26px rgba(0,0,0,0.14)",
+    },
+    cardTitle: {
+      margin: "0 0 16px",
+      color: isLight ? "#0f172a" : "#f8fafc",
+      fontSize: 17,
+      fontWeight: 800,
+    },
+    item: {
+      borderRadius: 13,
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      background: isLight ? "#f8fafc" : "#0f172a",
+      padding: 15,
+    },
+    empty: {
+      padding: "30px 20px",
+      textAlign: "center",
+      color: isLight ? "#94a3b8" : "#64748b",
+      borderRadius: 12,
+      border: isLight ? "1px dashed #cbd5e1" : "1px dashed #334155",
+    },
+    error: {
+      marginBottom: 16,
+      padding: "12px 14px",
+      borderRadius: 10,
+      border: "1px solid rgba(248,113,113,0.4)",
+      background: isLight ? "#fef2f2" : "rgba(127,29,29,0.22)",
+      color: isLight ? "#991b1b" : "#fecaca",
+    },
+  }
 }
 
 function toNumber(value: unknown, fallback = 0) {
@@ -283,7 +287,12 @@ function escapeCsv(value: unknown) {
   return `"${text.replaceAll('"', '""')}"`
 }
 
-export default function ReportsPage() {
+import { Suspense } from "react"
+
+function ReportsContent() {
+  const { theme } = useTheme()
+  const isLight = theme === "light"
+  const styles = getStyles(isLight)
   const searchParams = useSearchParams()
   const requestedProjectId = toNumber(searchParams.get("project"))
   const currentUser = getUser()
@@ -886,5 +895,13 @@ export default function ReportsPage() {
         </>
       )}
     </main>
+  )
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 32, color: "#94a3b8" }}>กำลังโหลด...</div>}>
+      <ReportsContent />
+    </Suspense>
   )
 }

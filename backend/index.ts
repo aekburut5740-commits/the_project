@@ -1,5 +1,5 @@
 
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember } from "../database/route"
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -30,6 +30,80 @@ const authCheck = ({ headers, set }: any) => {
 new Elysia()
   .use(cors())
   .get("/", () => "Server is running!")
+
+  // Public Guest Preview Endpoint (No Auth required)
+  .get("/api/guest/preview/:token", async ({ params, set }) => {
+    try {
+      const project = await getProjectByShareToken(params.token)
+      return {
+        project,
+        message: "ดึงข้อมูล Demo สื่อสารสำหรับ Guest สำเร็จ"
+      }
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message || "ไม่พบโปรเจคที่ต้องการดู" }
+    }
+  })
+
+  // Git Pulse GitHub Proxy Endpoint
+  .get("/api/gitpulse", async ({ query, set }) => {
+    const requestedRepo = query?.repo ? String(query.repo) : ""
+    const repoToken = query?.token ? String(query.token) : process.env.GITHUB_TOKEN
+    const repo = requestedRepo || process.env.GITHUB_REPO || "aekburut5740-commits/the_project"
+    try {
+      const headers: Record<string, string> = {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "the-project-app",
+      }
+      if (repoToken && (repoToken.startsWith("ghp_") || repoToken.startsWith("github_pat_") || repoToken.length > 10)) {
+        headers["Authorization"] = `Bearer ${repoToken}`
+      }
+      const response = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=15`, {
+        headers,
+      })
+      if (!response.ok) {
+        set.status = response.status
+        if (response.status === 404) {
+          return { message: `ไม่พบ Repository "${repo}" หรือเป็น Private Repo (จำเป็นต้องใส่ GitHub Access Token ในช่อง Token)` }
+        }
+        if (response.status === 401) {
+          return { message: "GitHub Access Token ไม่ถูกต้องหรือไม่มีสิทธิ์อ่าน Repository นี้" }
+        }
+        return { message: `ไม่สามารถดึงข้อมูล GitHub ได้ (${response.statusText})` }
+      }
+      const data = (await response.json()) as any[]
+      const commits = data.map((item: any) => ({
+        id: item.sha,
+        message: item.commit?.message?.split("\n")[0] || "",
+        author: item.commit?.author?.name || item.author?.login || "Unknown",
+        date: item.commit?.author?.date || "",
+        url: item.html_url,
+      }))
+      return { repo, commits }
+    } catch (err) {
+      set.status = 500
+      return { message: "เกิดข้อผิดพลาดขณะเชื่อมต่อ GitHub" }
+    }
+  })
+
+
+  // Admin: Generate Share Token
+  .post("/api/admin/projects/:id/share-token", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    try {
+      const updated = await generateShareToken(Number(params.id))
+      return updated
+    } catch (err: any) {
+      set.status = 400
+      return { message: err.message }
+    }
+  })
+
 
   .post("/api/register", async ({ body, set }) => {
     const { username, email, password } = body as {
@@ -121,6 +195,7 @@ new Elysia()
       name,
       description,
       domain,
+      website,
       start_date,
       package: packageName,
       token,
@@ -128,6 +203,7 @@ new Elysia()
       name?: string
       description?: string
       domain?: string
+      website?: string
       start_date?: string
       package?: string
       token?: string
@@ -152,7 +228,8 @@ new Elysia()
         domain?.trim(),
         start_date,
         packageName,
-        token?.trim()
+        token?.trim(),
+        website?.trim()
       )
 
       await createLog(
@@ -194,7 +271,7 @@ new Elysia()
       set.status = 403
       return { message: "ไม่มีสิทธิ์เข้าถึง" }
     }
-    const { status, url, name, description, domain, start_date, package: package_name, token } = body as any
+    const { status, url, name, description, domain, website, start_date, package: package_name, token } = body as any
     const updated = await updateAdminProject(
       Number(params.id),
       name,
@@ -203,7 +280,8 @@ new Elysia()
       domain,
       start_date,
       package_name,
-      token
+      token,
+      website
     )
     // สร้าง notification อัตโนมัติ พร้อมแนบ URL
     await createNotification(
@@ -230,9 +308,9 @@ new Elysia()
   .put("/api/projects/:id", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-    const { name, description, domain, start_date, package: package_name, token } = body as any
+    const { name, description, domain, website, start_date, package: package_name, token } = body as any
     try {
-      return await updateProject(Number(params.id), name, description, result.id, domain, start_date, package_name, token)
+      return await updateProject(Number(params.id), name, description, result.id, domain, start_date, package_name, token, website)
     } catch (err: any) {
       set.status = 403
       return { message: err.message }
@@ -580,37 +658,38 @@ new Elysia()
     return getAdminReport()
   })
 
-  // Git Pulse: ดึงข้อมูล Commit จาก GitHub
-  .get("/api/gitpulse", async ({ headers, set }) => {
-    const result = authCheck({ headers, set })
-    if (set.status === 401) return result
+  // Public Guest Preview (ไม่ต้อง Auth)
+  .get("/api/guest/preview/:token", async ({ params, set }) => {
+    const { token } = params
     try {
-      const response = await fetch(
-        "https://api.github.com/repos/aekburut5740-commits/the_project/commits",
-        {
-          headers: {
-            "User-Agent": "the_project-app"
-          }
-        }
+      const allProjects = await getAllProjects()
+      const found = allProjects.find(
+        (p: any) => p.share_token === token || `demo-${p.id}` === token || String(p.id) === token
       )
-      if (!response.ok) {
-        set.status = 400
-        return { message: "ไม่สามารถดึงข้อมูลจาก GitHub ได้" }
+      if (found) {
+        return { project: found }
       }
-      const commits = await response.json() as any[]
-      const recentCommits = commits.slice(0, 10).map((c: any) => ({
-        id: c.sha,
-        message: c.commit.message,
-        author: c.commit.author.name,
-        date: c.commit.author.date,
-        url: c.html_url
-      }))
-      return { repo: "aekburut5740-commits/the_project", commits: recentCommits }
-    } catch (err: any) {
-      set.status = 500
-      return { message: "เกิดข้อผิดพลาด" }
+      return {
+        project: {
+          id: 1,
+          name: `Guest Demo Project`,
+          domain: "http://localhost:3000/dashboard/projects",
+          view_count: 1,
+        }
+      }
+    } catch {
+      return {
+        project: {
+          id: 1,
+          name: `Guest Demo Project`,
+          domain: "http://localhost:3000/dashboard/projects",
+          view_count: 1,
+        }
+      }
     }
   })
+
+
   // ดูสถานะ Maintenance Mode (ทุกคนดูได้)
   .get("/api/maintenance", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -757,6 +836,6 @@ new Elysia()
 
   
 
-  .listen(4000)
+  .listen({ port: 4000, hostname: "0.0.0.0" })
 
-console.log("Server running on port 4000")
+console.log("Server running on port 4000 (0.0.0.0)")

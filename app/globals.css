@@ -5,18 +5,44 @@
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* System Theme Classes Override */
+.theme-light {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.theme-light main {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.theme-light aside {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+.theme-light aside a, .theme-light aside button {
+  color: #475569 !important;
+}
+
+.theme-light aside a:hover:not(.bg-blue-600), .theme-light aside button:hover:not(.bg-blue-600) {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.theme-light aside a.bg-blue-600, .theme-light aside button.bg-blue-600 {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.theme-light aside a.bg-blue-600 *, .theme-light aside button.bg-blue-600 * {
+  color: #ffffff !important;
+}
+
+.theme-dark {
+  background-color: #0d1117 !important;
+  color: #f9fafb !important;
 }
 
 body {
@@ -24,3 +50,4 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+

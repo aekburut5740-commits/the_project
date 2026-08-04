@@ -16,6 +16,7 @@ import {
 } from "recharts"
 import { backend, normalizeMilestone, normalizeProject } from "@/lib/backend"
 import { getUser, type JwtUser } from "@/lib/auth"
+import { useTheme } from "@/lib/themeContext"
 
 type ProjectStatus = "pending" | "in_progress" | "completed" | string
 type MilestoneStatus = "upcoming" | "in_progress" | "completed" | "overdue" | string
@@ -203,6 +204,10 @@ export default function DashboardPage() {
     }
   }, [milestones, projects])
 
+  const { theme } = useTheme()
+  const isLight = theme === "light"
+  const S = useMemo(() => getStyles(isLight), [isLight])
+
   return (
     <div style={S.page}>
       <div style={S.headerRow}>
@@ -260,11 +265,11 @@ export default function DashboardPage() {
       </div>
 
       <div style={S.firstGrid}>
-        <SectionCard title="Project Health">
+        <SectionCard title="Project Health" isLight={isLight}>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <PieChart width={160} height={160}>
               <Pie
-                data={dashboardData.projectHealthData.length ? dashboardData.projectHealthData : [{ name: "ยังไม่มีข้อมูล", value: 1, color: "#1f2937" }]}
+                data={dashboardData.projectHealthData.length ? dashboardData.projectHealthData : [{ name: "ยังไม่มีข้อมูล", value: 1, color: isLight ? "#cbd5e1" : "#1f2937" }]}
                 cx={75}
                 cy={75}
                 innerRadius={48}
@@ -272,7 +277,7 @@ export default function DashboardPage() {
                 dataKey="value"
                 paddingAngle={2}
               >
-                {(dashboardData.projectHealthData.length ? dashboardData.projectHealthData : [{ name: "ยังไม่มีข้อมูล", value: 1, color: "#1f2937" }]).map((entry) => (
+                {(dashboardData.projectHealthData.length ? dashboardData.projectHealthData : [{ name: "ยังไม่มีข้อมูล", value: 1, color: isLight ? "#cbd5e1" : "#1f2937" }]).map((entry) => (
                   <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Pie>
@@ -286,7 +291,7 @@ export default function DashboardPage() {
                 <div key={status} style={S.legendRow}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: config.color }} />
-                    <span style={{ color: "#9ca3af" }}>{config.label}</span>
+                    <span style={{ color: isLight ? "#475569" : "#9ca3af" }}>{config.label}</span>
                   </div>
                   <span style={S.monospaceMuted}>{count}</span>
                 </div>
@@ -298,6 +303,7 @@ export default function DashboardPage() {
         <SectionCard
           title={isAdmin ? "โปรเจคทั้งหมด" : "โปรเจคของฉัน"}
           action={<Link href="/dashboard/projects" style={S.cardLink}>ดูทั้งหมด →</Link>}
+          isLight={isLight}
         >
           {projects.length === 0 && !loading ? (
             <div style={S.empty}>ยังไม่มีโปรเจค</div>
@@ -335,18 +341,18 @@ export default function DashboardPage() {
       </div>
 
       <div style={S.secondGrid}>
-        <SectionCard title="การกระจายความคืบหน้าของโปรเจค">
+        <SectionCard title="การกระจายความคืบหน้าของโปรเจค" isLight={isLight}>
           {projects.length === 0 && !loading ? (
             <div style={S.empty}>ยังไม่มีข้อมูลความคืบหน้า</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={dashboardData.progressDistribution} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                <XAxis dataKey="range" tick={{ fill: "#6b7280", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: "#6b7280", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={isLight ? "#e2e8f0" : "#1f2937"} vertical={false} />
+                <XAxis dataKey="range" tick={{ fill: isLight ? "#64748b" : "#6b7280", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: isLight ? "#64748b" : "#6b7280", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  cursor={{ fill: "#172033" }}
-                  contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 8, fontSize: 12, color: "#e5e7eb" }}
+                  cursor={{ fill: isLight ? "#f1f5f9" : "#172033" }}
+                  contentStyle={{ background: isLight ? "#ffffff" : "#1f2937", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, fontSize: 12, color: isLight ? "#0f172a" : "#e5e7eb" }}
                   formatter={(value) => [`${value} โปรเจค`, "จำนวน"]}
                 />
                 <Bar dataKey="projects" fill="#4f8ef7" radius={[5, 5, 0, 0]} />
@@ -358,6 +364,7 @@ export default function DashboardPage() {
         <SectionCard
           title="Milestone ที่ควรติดตาม"
           action={<Link href="/dashboard/milestones" style={S.cardLink}>ดูทั้งหมด →</Link>}
+          isLight={isLight}
         >
           {dashboardData.upcomingMilestones.length === 0 && !loading ? (
             <div style={S.empty}>ไม่มี Milestone ที่ต้องติดตาม</div>
@@ -376,11 +383,11 @@ export default function DashboardPage() {
                     href={`/dashboard/milestones?project=${milestone.projectId}`}
                     style={{ ...S.milestoneLink, borderLeftColor: statusConfig.color }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#f9fafb" }}>{milestone.title}</div>
-                    <div style={{ fontSize: 11, color: "#6b7280" }}>{project?.name ?? "ไม่พบชื่อโปรเจค"}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: isLight ? "#0f172a" : "#f9fafb" }}>{milestone.title}</div>
+                    <div style={{ fontSize: 11, color: isLight ? "#64748b" : "#6b7280" }}>{project?.name ?? "ไม่พบชื่อโปรเจค"}</div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                       <span style={{ fontSize: 11, color: statusConfig.color }}>● {statusConfig.label}</span>
-                      <span style={{ fontSize: 11, color: "#6b7280" }}>{formatShortDate(milestone.dueDate)}</span>
+                      <span style={{ fontSize: 11, color: isLight ? "#64748b" : "#6b7280" }}>{formatShortDate(milestone.dueDate)}</span>
                     </div>
                   </Link>
                 )
@@ -391,10 +398,10 @@ export default function DashboardPage() {
       </div>
 
       <div style={S.quickGrid}>
-        <QuickLink href="/dashboard/feedback" title="Feedback Center" description="ตรวจข้อเสนอแนะและข้อความตอบกลับ" />
-        <QuickLink href="/dashboard/documents" title="Document Vault" description="ดูและจัดการเอกสารของโปรเจค" />
-        <QuickLink href="/dashboard/reports" title="Reports" description="เปิดรายงานและสรุปความคืบหน้า" />
-        {isAdmin && <QuickLink href="/dashboard/git" title="Git Pulse" description="ดูข้อมูล Repository และ Commit" />}
+        <QuickLink href="/dashboard/feedback" title="Feedback Center" description="ตรวจข้อเสนอแนะและข้อความตอบกลับ" isLight={isLight} />
+        <QuickLink href="/dashboard/documents" title="Document Vault" description="ดูและจัดการเอกสารของโปรเจค" isLight={isLight} />
+        <QuickLink href="/dashboard/reports" title="Reports" description="เปิดรายงานและสรุปความคืบหน้า" isLight={isLight} />
+        {isAdmin && <QuickLink href="/dashboard/git" title="Git Pulse" description="ดูข้อมูล Repository และ Commit" isLight={isLight} />}
       </div>
     </div>
   )
@@ -404,15 +411,29 @@ function SectionCard({
   title,
   action,
   children,
+  isLight = false,
 }: {
   title: string
   action?: React.ReactNode
   children: React.ReactNode
+  isLight?: boolean
 }) {
   return (
-    <section style={S.sectionCard}>
-      <div style={S.sectionHeader}>
-        <div style={S.sectionTitle}>{title}</div>
+    <section
+      style={{
+        background: isLight ? "#ffffff" : "#111827",
+        border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+        borderRadius: 14,
+        padding: "20px 22px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+        minWidth: 0,
+        boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: isLight ? "#475569" : "#6b7280", letterSpacing: "0.08em", textTransform: "uppercase" }}>{title}</div>
         {action}
       </div>
       {children}
@@ -420,126 +441,147 @@ function SectionCard({
   )
 }
 
-function QuickLink({ href, title, description }: { href: string; title: string; description: string }) {
+function QuickLink({ href, title, description, isLight = false }: { href: string; title: string; description: string; isLight?: boolean }) {
   return (
-    <Link href={href} style={S.quickLink}>
-      <div style={{ fontSize: 14, color: "#f9fafb", fontWeight: 700 }}>{title}</div>
-      <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>{description}</div>
+    <Link
+      href={href}
+      style={{
+        background: isLight ? "#ffffff" : "#111827",
+        border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+        borderRadius: 12,
+        padding: "16px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        textDecoration: "none",
+        boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+      }}
+    >
+      <div style={{ fontSize: 14, color: isLight ? "#0f172a" : "#f9fafb", fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: 12, color: isLight ? "#64748b" : "#6b7280", lineHeight: 1.5 }}>{description}</div>
       <div style={{ fontSize: 12, color: "#4f8ef7", marginTop: 4 }}>เปิดหน้า →</div>
     </Link>
   )
 }
 
-const S: Record<string, React.CSSProperties> = {
-  page: {
-    background: "#0d1117",
-    minHeight: "100vh",
-    padding: "28px 32px",
-    fontFamily: "'DM Sans','Segoe UI',sans-serif",
-    color: "#e5e7eb",
-  },
-  headerRow: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 16,
-    marginBottom: 20,
-  },
-  title: { fontSize: 24, fontWeight: 700, color: "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
-  subtitle: { fontSize: 13, color: "#6b7280", margin: "4px 0 0" },
-  refreshButton: {
-    border: "1px solid #374151",
-    borderRadius: 9,
-    background: "#111827",
-    color: "#cbd5e1",
-    padding: "9px 13px",
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 600,
-  },
-  roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
-  errorBox: {
-    color: "#fca5a5",
-    background: "#7f1d1d22",
-    border: "1px solid #ef444444",
-    borderRadius: 10,
-    padding: "10px 12px",
-    marginBottom: 14,
-    fontSize: 13,
-  },
-  loadingBox: {
-    color: "#9ca3af",
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: 10,
-    padding: "10px 12px",
-    marginBottom: 14,
-    fontSize: 13,
-  },
-  statsRow: { display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" },
-  statCard: {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderTop: "3px solid",
-    borderRadius: 12,
-    padding: "16px 18px",
-    flex: "1 1 140px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  statValue: { fontSize: 26, fontWeight: 700, color: "#f9fafb", fontFamily: "monospace" },
-  statLabel: { fontSize: 12, color: "#6b7280" },
-  firstGrid: { display: "grid", gridTemplateColumns: "250px minmax(0, 1fr)", gap: 14, marginBottom: 14 },
-  secondGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 14, marginBottom: 14 },
-  sectionCard: {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: 14,
-    padding: "20px 22px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-    minWidth: 0,
-  },
-  sectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  sectionTitle: { fontSize: 12, fontWeight: 700, color: "#6b7280", letterSpacing: "0.08em", textTransform: "uppercase" },
-  cardLink: { color: "#4f8ef7", textDecoration: "none", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" },
-  legendRow: { display: "flex", justifyContent: "space-between", fontSize: 12 },
-  monospaceMuted: { color: "#4b5563", fontFamily: "monospace" },
-  projectRowLink: {
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
-    background: "#0d1117",
-    border: "1px solid #1a2232",
-    borderRadius: 10,
-    padding: "12px 14px",
-    textDecoration: "none",
-  },
-  projectName: { fontSize: 14, fontWeight: 600, color: "#f9fafb", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  projectId: { fontSize: 11, color: "#4b5563", marginLeft: 8 },
-  progressTrack: { flex: 1, background: "#1f2937", borderRadius: 999, height: 5, overflow: "hidden" },
-  progressText: { fontSize: 11, color: "#6b7280", fontFamily: "monospace", flexShrink: 0 },
-  badge: { fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0 },
-  milestoneLink: {
-    borderLeft: "3px solid",
-    padding: "4px 0 4px 12px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    textDecoration: "none",
-  },
-  quickGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 },
-  quickLink: {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: 12,
-    padding: "16px 18px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    textDecoration: "none",
-  },
-  empty: { color: "#4b5563", fontSize: 13, textAlign: "center", padding: "24px 0", fontStyle: "italic" },
+function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+  return {
+    page: {
+      background: isLight ? "#f8fafc" : "#0d1117",
+      minHeight: "100vh",
+      padding: "28px 32px",
+      fontFamily: "'DM Sans','Segoe UI',sans-serif",
+      color: isLight ? "#0f172a" : "#e5e7eb",
+    },
+    headerRow: {
+      display: "flex",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 16,
+      marginBottom: 20,
+    },
+    title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
+    subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
+    refreshButton: {
+      border: isLight ? "1px solid #cbd5e1" : "1px solid #374151",
+      borderRadius: 9,
+      background: isLight ? "#ffffff" : "#111827",
+      color: isLight ? "#334155" : "#cbd5e1",
+      padding: "9px 13px",
+      cursor: "pointer",
+      fontSize: 12,
+      fontWeight: 600,
+    },
+    roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
+    errorBox: {
+      color: "#fca5a5",
+      background: "#7f1d1d22",
+      border: "1px solid #ef444444",
+      borderRadius: 10,
+      padding: "10px 12px",
+      marginBottom: 14,
+      fontSize: 13,
+    },
+    loadingBox: {
+      color: isLight ? "#64748b" : "#9ca3af",
+      background: isLight ? "#ffffff" : "#111827",
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      borderRadius: 10,
+      padding: "10px 12px",
+      marginBottom: 14,
+      fontSize: 13,
+    },
+    statsRow: { display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" },
+    statCard: {
+      background: isLight ? "#ffffff" : "#111827",
+      borderLeft: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      borderRight: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      borderTopWidth: 3,
+      borderTopStyle: "solid",
+      borderRadius: 12,
+      padding: "16px 18px",
+      flex: "1 1 140px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+    },
+    statValue: { fontSize: 26, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", fontFamily: "monospace" },
+    statLabel: { fontSize: 12, color: isLight ? "#64748b" : "#6b7280" },
+    firstGrid: { display: "grid", gridTemplateColumns: "250px minmax(0, 1fr)", gap: 14, marginBottom: 14 },
+    secondGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 14, marginBottom: 14 },
+    sectionCard: {
+      background: isLight ? "#ffffff" : "#111827",
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      borderRadius: 14,
+      padding: "20px 22px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 16,
+      minWidth: 0,
+      boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+    },
+    sectionHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
+    sectionTitle: { fontSize: 12, fontWeight: 700, color: isLight ? "#475569" : "#6b7280", letterSpacing: "0.08em", textTransform: "uppercase" },
+    cardLink: { color: "#4f8ef7", textDecoration: "none", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" },
+    legendRow: { display: "flex", justifyContent: "space-between", fontSize: 12, color: isLight ? "#334155" : "#e5e7eb" },
+    monospaceMuted: { color: isLight ? "#64748b" : "#4b5563", fontFamily: "monospace" },
+    projectRowLink: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      background: isLight ? "#f8fafc" : "#0d1117",
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1a2232",
+      borderRadius: 10,
+      padding: "12px 14px",
+      textDecoration: "none",
+    },
+    projectName: { fontSize: 14, fontWeight: 600, color: isLight ? "#0f172a" : "#f9fafb", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+    projectId: { fontSize: 11, color: isLight ? "#64748b" : "#4b5563", marginLeft: 8 },
+    progressTrack: { flex: 1, background: isLight ? "#e2e8f0" : "#1f2937", borderRadius: 999, height: 5, overflow: "hidden" },
+    progressText: { fontSize: 11, color: isLight ? "#64748b" : "#6b7280", fontFamily: "monospace", flexShrink: 0 },
+    badge: { fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0 },
+    milestoneLink: {
+      borderLeft: "3px solid",
+      padding: "4px 0 4px 12px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      textDecoration: "none",
+    },
+    quickGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 },
+    quickLink: {
+      background: isLight ? "#ffffff" : "#111827",
+      border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
+      borderRadius: 12,
+      padding: "16px 18px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      textDecoration: "none",
+      boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
+    },
+    empty: { color: isLight ? "#94a3b8" : "#4b5563", fontSize: 13, textAlign: "center", padding: "24px 0", fontStyle: "italic" },
+  }
 }
