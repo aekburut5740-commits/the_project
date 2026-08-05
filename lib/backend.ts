@@ -11,57 +11,57 @@ import type {
 export const backend = {
   profile: () => apiFetch<{ user: JwtUser }>("/api/profile"),
   projects: (admin = false) =>
-  apiFetch<unknown[]>(
-    admin
-      ? "/api/admin/projects"
-      : "/api/projects"
-  ),
+    apiFetch<unknown[]>(
+      admin
+        ? "/api/admin/projects"
+        : "/api/projects"
+    ),
 
-createProject: (body: CreateProjectInput) =>
-  apiFetch<unknown>("/api/projects", {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
-
-updateProject: (
-  id: number,
-  body: UpdateProjectInput,
-  admin = false
-) =>
-  apiFetch<unknown>(
-    admin
-      ? `/api/admin/projects/${id}`
-      : `/api/projects/${id}`,
-    {
-      method: "PUT",
+  createProject: (body: CreateProjectInput) =>
+    apiFetch<unknown>("/api/projects", {
+      method: "POST",
       body: JSON.stringify(body),
-    }
-  ),
+    }),
 
-updateProgress: (
-  id: number,
-  progress: number
-) =>
-  apiFetch<unknown>(
-    `/api/admin/projects/${id}/progress`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ progress }),
-    }
-  ),
+  updateProject: (
+    id: number,
+    body: UpdateProjectInput,
+    admin = false
+  ) =>
+    apiFetch<unknown>(
+      admin
+        ? `/api/admin/projects/${id}`
+        : `/api/projects/${id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }
+    ),
 
-deleteProject: (id: number) =>
-  apiFetch<{ message?: string }>(
-    `/api/admin/projects/${id}`,
-    {
-      method: "DELETE",
-    }
-  ),
+  updateProgress: (
+    id: number,
+    progress: number
+  ) =>
+    apiFetch<unknown>(
+      `/api/admin/projects/${id}/progress`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ progress }),
+      }
+    ),
 
-projectMembers: (projectId: number) =>
-  apiFetch<unknown[]>(
-    `/api/projects/${projectId}/members`
-  ),
+  deleteProject: (id: number) =>
+    apiFetch<{ message?: string }>(
+      `/api/admin/projects/${id}`,
+      {
+        method: "DELETE",
+      }
+    ),
+
+  projectMembers: (projectId: number) =>
+    apiFetch<unknown[]>(
+      `/api/projects/${projectId}/members`
+    ),
   dashboard: (admin = false) => apiFetch(admin ? "/api/admin/dashboard" : "/api/dashboard"),
   projectHealth: (id: number) => apiFetch<any>(`/api/projects/${id}/health`),
   milestones: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/milestones`),
@@ -91,6 +91,12 @@ projectMembers: (projectId: number) =>
   addProjectMember: (projectId: number, name: string, role = "ผู้ดูแลโปรเจค") => apiFetch(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ name, role }) }),
   removeProjectMember: (id: number) => apiFetch(`/api/members/${id}`, { method: "DELETE" }),
   notifications: () => apiFetch<any[]>("/api/notifications"),
+  unreadCount: () =>
+    apiFetch<{
+      notifications: number
+      feedbacks: number
+      total: number
+    }>("/api/unread-count"),
   markNotificationRead: (id: number) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
   deleteNotification: (id: number) => apiFetch(`/api/notifications/${id}`, { method: "DELETE" }),
@@ -106,19 +112,19 @@ projectMembers: (projectId: number) =>
     ),
   guestPreview: (token: string) => apiFetch<any>(`/api/guest/preview/${token}`),
   generateShareToken: (id: number) => apiFetch<any>(`/api/admin/projects/${id}/share-token`, { method: "POST" }),
-  register: (body: {username: string, email: string, password: string}) =>apiFetch("/api/register", {method: "POST",body: JSON.stringify(body)}),
+  register: (body: { username: string, email: string, password: string }) => apiFetch("/api/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: {
-  username: string
-  email: string
-  password: string
-}) =>
-  apiFetch<{
-    message: string
-    token: string
-  }>("/api/login", {
-    method: "POST",
-    body: JSON.stringify(body)
-  }),
+    username: string
+    email: string
+    password: string
+  }) =>
+    apiFetch<{
+      message: string
+      token: string
+    }>("/api/login", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
 }
 
 
@@ -127,7 +133,7 @@ export function normalizeProject(project: any): Project {
   const domain = String(project.domain ?? "")
   let rawWebsite = String(project.website ?? "").trim()
   const id = Number(project.id)
-  
+
   if (!rawWebsite || rawWebsite === "https://example.com" || rawWebsite === "example.com") {
     const currentOrigin = typeof window !== "undefined" ? window.location.origin : ""
     rawWebsite = currentOrigin ? `${currentOrigin}/dashboard/projects/${id}` : `/dashboard/projects/${id}`
@@ -141,7 +147,7 @@ export function normalizeProject(project: any): Project {
 
     status:
       project.status === "in_progress" ||
-      project.status === "completed"
+        project.status === "completed"
         ? project.status
         : "pending",
 

@@ -28,15 +28,29 @@ export default function ProjectsPage() {
   const [user, setUser] = useState<{ id: number; username: string; role: "admin" | "customer" }>({ id: 0, username: "", role: "customer" })
   const [isAdmin, setIsAdmin] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
-    const currentUser = getUser() || { id: 0, username: "", role: "customer" as const }
+    const currentUser = getUser() || {
+      id: 0,
+      username: "",
+      role: "customer" as const
+    }
+
     setUser(currentUser)
+
     const adminState = currentUser.role === "admin"
+
     setIsAdmin(adminState)
+
     void loadProjects(adminState)
+
+    if (adminState) {
+      loadCustomers()
+    }
+
   }, [])
 
   async function loadProjects(adminRole = isAdmin) {
@@ -79,6 +93,26 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadCustomers() {
+
+    try {
+
+      const users = await backend.users()
+
+      setCustomers(
+        users.filter(
+          (user: any) => user.role === "customer"
+        )
+      )
+
+    } catch (err) {
+
+      console.log(err)
+
+    }
+
   }
 
   const [search, setSearch] = useState("")
@@ -225,9 +259,15 @@ export default function ProjectsPage() {
       )}
 
       {editingProject && (
-        <EditModal project={editingProject} isCreating={isCreating}
+        <EditModal
+          project={editingProject}
+          isCreating={isCreating}
           onClose={() => { setEditingProject(null); setIsCreating(false) }}
-          onSave={handleSave} onDelete={handleDelete} isLight={isLight} />
+          onSave={handleSave}
+          onDelete={handleDelete}
+          isLight={isLight}
+          customers={customers}
+        />
       )}
     </div>
   )
@@ -316,9 +356,22 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project
   )
 }
 
-function EditModal({ project, isCreating, onClose, onSave, onDelete, isLight = false }: {
-  project: Project; isCreating: boolean
-  onClose: () => void; onSave: (p: Project) => void; onDelete: (id: number) => void; isLight?: boolean
+function EditModal({
+  project,
+  isCreating,
+  onClose,
+  onSave,
+  onDelete,
+  isLight = false,
+  customers = []
+}: {
+  project: Project;
+  isCreating: boolean;
+  onClose: () => void;
+  onSave: (p: Project) => void;
+  onDelete: (id: number) => void;
+  isLight?: boolean;
+  customers?: any[];
 }) {
   const S = getStyles(isLight)
   const [form, setForm] = useState<Project>({ ...project, managers: project.managers.map((manager) => ({ ...manager })) })
@@ -386,20 +439,28 @@ function EditModal({ project, isCreating, onClose, onSave, onDelete, isLight = f
           </Field>
           <Field label="วันที่เริ่ม" isLight={isLight}><Input type="date" value={form.startDate} onChange={(v) => set("startDate", v)} isLight={isLight} /></Field>
           <SLabel label="ผู้ดูแลโปรเจค" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {form.managers.map((manager, index) => (
-              <div key={`${manager.id}-${index}`} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  value={manager.name}
-                  onChange={(e) => updateManager(index, e.target.value)}
-                  placeholder="ชื่อผู้ดูแล"
-                  style={S.input}
-                />
-                <button onClick={() => removeManager(index)} style={S.removeBtn}>ลบ</button>
-              </div>
+          <SLabel label="ลูกค้า" />
+
+          <select
+            value={form.ownerId}
+            onChange={(e) => set("ownerId", Number(e.target.value))}
+            style={S.input}
+          >
+
+            <option value={0}>
+              เลือกลูกค้า
+            </option>
+
+            {customers.map((customer: any) => (
+              <option
+                key={customer.id}
+                value={customer.id}
+              >
+                {customer.username}
+              </option>
             ))}
-            <button onClick={addManager} style={S.addManagerBtn}>+ เพิ่มผู้ดูแล</button>
-          </div>
+
+          </select>
           <SLabel label="ข้อมูลเทคนิค (Git & Package)" />
           <Field label="แพ็กเกจ" isLight={isLight}>
             <select value={form.package} onChange={(e) => set("package", e.target.value)} style={S.input}>

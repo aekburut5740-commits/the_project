@@ -944,3 +944,52 @@ export async function generateShareToken(projectId: number) {
   )
   return result.rows[0]
 }
+
+export async function getUnreadCount(
+  user_id: number,
+  role: string
+) {
+
+  const notificationResult = await db.query(
+    `
+    SELECT COUNT(*)
+    FROM notifications
+    WHERE user_id = $1
+    AND is_read = FALSE
+    `,
+    [user_id]
+  )
+
+
+  let feedbackCount = 0
+
+
+  if (role === "admin") {
+
+    const feedbackResult = await db.query(
+      `
+      SELECT COUNT(*)
+      FROM feedbacks
+      WHERE is_read = FALSE
+      `
+    )
+
+    feedbackCount = Number(
+      feedbackResult.rows[0].count
+    )
+  }
+
+
+  return {
+    notifications:
+      Number(notificationResult.rows[0].count),
+
+    feedbacks:
+      feedbackCount,
+
+    total:
+      Number(notificationResult.rows[0].count)
+      +
+      feedbackCount
+  }
+}

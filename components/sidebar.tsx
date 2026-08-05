@@ -28,14 +28,14 @@ function ThemeToggleButton() {
 }
 
 const navItems = [
-  { label: "Dashboard",      href: "/dashboard",               icon: LayoutDashboard },
-  { label: "Projects",       href: "/dashboard/projects",      icon: FolderKanban },
-  { label: "Milestones",     href: "/dashboard/milestones",    icon: Flag },
-  { label: "Notifications",  href: "/dashboard/notifications", icon: Bell },
-  { label: "Feedback Center",href: "/dashboard/feedback",      icon: MessageSquare },
-  { label: "Document Vault", href: "/dashboard/documents",     icon: FileText },
-  { label: "Git Pulse",      href: "/dashboard/git",           icon: GitBranch },
-  { label: "Reports",        href: "/dashboard/reports",       icon: BarChart2 },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Projects", href: "/dashboard/projects", icon: FolderKanban },
+  { label: "Milestones", href: "/dashboard/milestones", icon: Flag },
+  { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
+  { label: "Feedback Center", href: "/dashboard/feedback", icon: MessageSquare },
+  { label: "Document Vault", href: "/dashboard/documents", icon: FileText },
+  { label: "Git Pulse", href: "/dashboard/git", icon: GitBranch },
+  { label: "Reports", href: "/dashboard/reports", icon: BarChart2 },
 ];
 
 interface ProfileInfo {
@@ -72,7 +72,7 @@ export default function Sidebar() {
           setAvatar(res.user.avatar || null);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const jwtUser = getUser();
@@ -81,16 +81,17 @@ export default function Sidebar() {
   useEffect(() => {
     if (!mounted) return;
 
-    backend.notifications()
-      .then((list: any[]) => setNotifCount(Array.isArray(list) ? list.filter((n) => !n.is_read).length : 0))
-      .catch(() => setNotifCount(0));
+    backend.unreadCount()
+      .then((data: any) => {
+        setNotifCount(data.notifications || 0)
+        setFeedbackUnread(data.feedbacks || 0)
+      })
+      .catch(() => {
+        setNotifCount(0)
+        setFeedbackUnread(0)
+      })
 
-    if (isAdmin) {
-      backend.allFeedbacks()
-        .then((list: any[]) => setFeedbackUnread(Array.isArray(list) ? list.filter((f) => f.status === "sent" || f.status === "pending" || f.status === "received" || f.status === "in_progress").length : 0))
-        .catch(() => setFeedbackUnread(0));
-    }
-  }, [pathname, isAdmin, mounted]);
+  }, [pathname, mounted])
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -159,9 +160,8 @@ export default function Sidebar() {
           const isFeedback = href === "/dashboard/feedback";
           return (
             <Link key={href} href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active ? "bg-blue-600 text-white font-semibold" : "text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
-              }`}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${active ? "bg-blue-600 text-white font-semibold" : "text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+                }`}
             >
               <Icon size={17} className={active ? "text-white" : "text-gray-500 dark:text-gray-400"} />
               <span className="flex-1">{label}</span>
@@ -197,11 +197,10 @@ export default function Sidebar() {
 
       <div className="px-3 pb-4 space-y-0.5">
         <Link href="/dashboard/settings"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-            pathname === "/dashboard/settings"
-              ? "bg-blue-600 text-white font-semibold"
-              : "text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
-          }`}>
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${pathname === "/dashboard/settings"
+            ? "bg-blue-600 text-white font-semibold"
+            : "text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white"
+            }`}>
           <Settings size={17} className={pathname === "/dashboard/settings" ? "text-white" : "text-gray-500 dark:text-gray-400"} />
           <span>Settings</span>
         </Link>

@@ -53,4 +53,5 @@ export interface UpdateProjectInput {
   start_date?: string
   package?: string
   token?: string
+  user_id?: number
 }
