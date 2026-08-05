@@ -6,6 +6,7 @@ async function seedAdmin() {
     // 1. Ensure all required columns exist in tables
     await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);`)
     await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'customer';`)
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`)
     await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS website TEXT;`)
     await db.query(`UPDATE projects SET website = 'http://localhost:3000/dashboard/projects/' || id WHERE website IS NULL OR website = '' OR website = 'https://example.com';`)
     await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS domain TEXT;`)

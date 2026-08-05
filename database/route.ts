@@ -1,6 +1,7 @@
 import { db } from "../database/db"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
+import { unlink } from "fs/promises"
 
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
 
@@ -185,7 +186,8 @@ export async function getAllUsers() {
 }
 
 export async function getProfile(user_id: number) {
-  const result = await db.query("SELECT id, username, email, role FROM users WHERE id = $1", [user_id])
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`)
+  const result = await db.query("SELECT id, username, email, role, avatar FROM users WHERE id = $1", [user_id])
   if (!result.rows.length) throw new Error("ไม่พบ user")
   return result.rows[0]
 }
@@ -475,19 +477,35 @@ export async function getFiles(project_id: number) {
 // ลบไฟล์
 export async function deleteFile(file_id: number, user_id: number, role: string) {
   let result
-  if (role === 'admin') {
+
+  if (role === "admin") {
     result = await db.query(
-      `DELETE FROM files WHERE id = $1 RETURNING *`,
+      `SELECT filepath FROM files WHERE id = $1`,
       [file_id]
     )
   } else {
     result = await db.query(
-      `DELETE FROM files WHERE id = $1 AND user_id = $2 RETURNING *`,
+      `SELECT filepath FROM files WHERE id = $1 AND user_id = $2`,
       [file_id, user_id]
     )
   }
+
   if (!result.rows.length) throw new Error("ไม่พบไฟล์หรือไม่มีสิทธิ์ลบ")
-  return result.rows[0]
+
+  const filepath = result.rows[0].filepath
+
+  // ลบไฟล์จริงในเครื่องก่อน
+  await unlink(filepath).catch(() => {
+    // ถ้าไฟล์จริงหายไปแล้ว ไม่ต้องให้พัง
+  })
+
+  // แล้วค่อยลบข้อมูลในฐานข้อมูล
+  const deleteResult = await db.query(
+    `DELETE FROM files WHERE id = $1 RETURNING *`,
+    [file_id]
+  )
+
+  return deleteResult.rows[0]
 }
 // ===== ACTIVITY LOG =====
 
@@ -810,13 +828,14 @@ export async function getWebhooks() {
 // ===== SETTINGS =====
 
 // แก้ไขโปรไฟล์
-export async function updateProfile(user_id: number, username: string, email: string) {
+export async function updateProfile(user_id: number, username: string, email: string, avatar?: string) {
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`)
   const result = await db.query(
     `UPDATE users 
-     SET username = $1, email = $2 
-     WHERE id = $3 
-     RETURNING id, username, email, role`,
-    [username, email, user_id]
+     SET username = $1, email = $2, avatar = COALESCE($3, avatar)
+     WHERE id = $4 
+     RETURNING id, username, email, role, avatar`,
+    [username, email, avatar ?? null, user_id]
   )
   if (!result.rows.length) throw new Error("ไม่พบผู้ใช้งาน")
   return result.rows[0]

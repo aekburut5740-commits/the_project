@@ -82,7 +82,11 @@ projectMembers: (projectId: number) =>
   users: () => apiFetch<any[]>("/api/admin/users"),
   maintenance: () => apiFetch<any>("/api/maintenance"),
   setMaintenance: (is_active: boolean, message = "") => apiFetch("/api/admin/maintenance", { method: "PATCH", body: JSON.stringify({ is_active, message }) }),
-  updateProfile: (username: string, email: string) => apiFetch("/api/profile", { method: "PUT", body: JSON.stringify({ username, email }) }),
+  updateProfile: (username: string, email: string, avatar?: string | null) =>
+    apiFetch("/api/profile", {
+      method: "PUT",
+      body: JSON.stringify({ username, email, avatar }),
+    }),
   changePassword: (old_password: string, new_password: string) => apiFetch("/api/profile/password", { method: "PUT", body: JSON.stringify({ old_password, new_password }) }),
   addProjectMember: (projectId: number, name: string, role = "ผู้ดูแลโปรเจค") => apiFetch(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ name, role }) }),
   removeProjectMember: (id: number) => apiFetch(`/api/members/${id}`, { method: "DELETE" }),

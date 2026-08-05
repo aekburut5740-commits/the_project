@@ -43,6 +43,7 @@ interface ProfileInfo {
   username: string;
   email: string;
   role: "admin" | "customer";
+  avatar?: string | null;
 }
 
 export default function Sidebar() {
@@ -66,7 +67,10 @@ export default function Sidebar() {
     }
     backend.profile()
       .then((res: any) => {
-        if (res?.user) setProfile(res.user);
+        if (res?.user) {
+          setProfile(res.user);
+          setAvatar(res.user.avatar || null);
+        }
       })
       .catch(() => {});
   }, []);
@@ -90,9 +94,22 @@ export default function Sidebar() {
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !profile) return;
     const reader = new FileReader();
-    reader.onload = () => setAvatar(reader.result as string);
+    reader.onload = async () => {
+      const nextAvatar = reader.result as string;
+      setAvatar(nextAvatar);
+      try {
+        const updatedProfile = await backend.updateProfile(
+          profile.username,
+          profile.email,
+          nextAvatar
+        ) as ProfileInfo;
+        setProfile(updatedProfile);
+      } catch {
+        setAvatar(profile.avatar || null);
+      }
+    };
     reader.readAsDataURL(file);
   }
 
@@ -118,8 +135,8 @@ export default function Sidebar() {
     setSavingName(true);
     setNameError("");
     try {
-      await backend.updateProfile(newName, profile.email);
-      setProfile({ ...profile, username: newName });
+      const updatedProfile = await backend.updateProfile(newName, profile.email, avatar) as ProfileInfo;
+      setProfile(updatedProfile);
       setEditingName(false);
     } catch (err) {
       setNameError(err instanceof Error ? err.message : "บันทึกชื่อไม่สำเร็จ");

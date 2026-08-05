@@ -1,10 +1,12 @@
 
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken } from "../database/route"
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken,markFeedbackAsRead } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
 import type { JwtPayload } from "jsonwebtoken"
+import path from "path"
 
+const UPLOADS_DIR = path.join(__dirname, "../uploads")
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
 
 const authCheck = ({ headers, set }: any) => {
@@ -402,6 +404,18 @@ new Elysia()
       return { message: err.message }
     }
   })
+  // Feedback: ทำเครื่องหมายว่าอ่านแล้ว
+  .patch("/api/feedbacks/:id/read", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+
+    try {
+      return await markFeedbackAsRead(Number(params.id))
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
 
   // Customer: กดอ่านทั้งหมด
   .patch("/api/notifications/read-all", async ({ headers, set }) => {
@@ -753,13 +767,13 @@ new Elysia()
   .put("/api/profile", async ({ headers, set, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-    const { username, email } = body as any
+    const { username, email, avatar } = body as any
     if (!username || !email) {
       set.status = 400
       return { message: "กรุณากรอกชื่อผู้ใช้และอีเมล" }
     }
     try {
-      return await updateProfile(result.id, username, email)
+      return await updateProfile(result.id, username, email, avatar)
     } catch (err: any) {
       set.status = 400
       return { message: err.message }
@@ -824,7 +838,7 @@ new Elysia()
 
   // เสิร์ฟไฟล์จาก uploads folder
   .get("/uploads/:filename", async ({ params, set }) => {
-    const filepath = `./uploads/${params.filename}`
+    const filepath = path.join(UPLOADS_DIR, params.filename)
     const file = Bun.file(filepath)
     const exists = await file.exists()
     if (!exists) {
