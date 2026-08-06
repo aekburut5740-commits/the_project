@@ -144,6 +144,7 @@ export default function ProjectsPage() {
           start_date: updated.startDate,
           package: updated.package,
           token: updated.token,
+          user_id: updated.ownerId || undefined,
         })) as Project
         const managers = isAdmin ? await addNewManagers(created.id, updated.managers) : []
         setProjects((prev) => [...prev, { ...created, managers }])
@@ -159,6 +160,7 @@ export default function ProjectsPage() {
             start_date: updated.startDate,
             package: updated.package,
             token: updated.token,
+            user_id: updated.ownerId,
           }, true)
           await backend.updateProgress(updated.id, updated.progress)
           await syncManagers(updated.id, old?.managers || [], updated.managers)
