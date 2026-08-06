@@ -157,7 +157,8 @@ export async function updateAdminProject(
   start_date?: string,
   package_name?: string,
   token?: string,
-  website?: string
+  website?: string,
+  owner_id?: number
 ) {
   await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS website TEXT;`)
   const result = await db.query(
@@ -169,9 +170,10 @@ export async function updateAdminProject(
        start_date = COALESCE($5, start_date),
        package = COALESCE($6, package),
        token = COALESCE($7, token),
-       website = COALESCE($9, website)
+       website = COALESCE($9, website),
+       user_id = COALESCE($10, user_id)
      WHERE id = $8 RETURNING *`,
-    [name, description, status, domain, start_date || null, package_name, token, id, website]
+    [name, description, status, domain, start_date || null, package_name, token, id, website, owner_id || null]
   )
   if (!result.rows.length) throw new Error("ไม่พบโปรเจค")
   return result.rows[0]
@@ -663,8 +665,9 @@ export async function createFeedbackReply(feedback_id: number, user_id: number, 
 
 // ดูการตอบกลับของ Ticket
 export async function getFeedbackReplies(feedback_id: number) {
+  await db.query(`ALTER TABLE feedback_replies ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;`)
   const result = await db.query(
-    `SELECT feedback_replies.*, users.username 
+    `SELECT feedback_replies.*, users.username, users.role AS author_role
      FROM feedback_replies 
      JOIN users ON feedback_replies.user_id = users.id
      WHERE feedback_replies.feedback_id = $1 
@@ -674,6 +677,16 @@ export async function getFeedbackReplies(feedback_id: number) {
   return result.rows
 }
 
+// ทำเครื่องหมายว่าอ่านข้อความตอบกลับแล้ว (เฉพาะข้อความที่ "ไม่ใช่" ของคนที่กำลังเปิดดูอยู่)
+export async function markRepliesAsRead(feedback_id: number, viewer_id: number) {
+  const result = await db.query(
+    `UPDATE feedback_replies SET is_read = TRUE
+     WHERE feedback_id = $1 AND user_id != $2 AND is_read = FALSE
+     RETURNING id`,
+    [feedback_id, viewer_id]
+  )
+  return { updated: result.rows.length }
+}
 // ===== REPORTS =====
 
 // Customer: รายงานโปรเจคของตัวเอง
