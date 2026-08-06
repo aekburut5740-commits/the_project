@@ -98,11 +98,24 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-          <WebsiteCard website={project.website} isLight={isLight} />
-          <InfoCard label="ความคืบหน้า" value={`${clampProgress(project.progress)}%`} isLight={isLight} />
-          <InfoCard label="แพ็กเกจ" value={project.package} isLight={isLight} />
-          <InfoCard label="วันที่เริ่ม" value={formatDate(project.startDate)} isLight={isLight} />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: 14,
+          }}
+        >
+          <InfoCard
+            label="แพ็กเกจ"
+            value={project.package}
+            isLight={isLight}
+          />
+
+          <InfoCard
+            label="วันที่เริ่ม"
+            value={formatDate(project.startDate)}
+            isLight={isLight}
+          />
         </div>
 
         {/* Progress Bar */}
@@ -141,28 +154,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           <InfoCard label="Website URL" value={project.website || "-"} isLight={isLight} />
           <InfoCard label="Token" value={project.token || "-"} isLight={isLight} />
           <InfoCard label="Owner ID" value={String(project.ownerId)} isLight={isLight} />
-          <div style={{ background: isLight ? "#f8fafc" : "#0d1117", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ fontSize: 11, color: isLight ? "#64748b" : "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              ผู้จัดการและดูแล
-            </div>
-            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-              {project.managers.length > 0 ? (
-                project.managers.map((manager) => (
-                  <div key={manager.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${manager.color}22`, color: manager.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: `1px solid ${manager.color}44` }}>
-                      {manager.avatar}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, color: isLight ? "#0f172a" : "#f9fafb", fontWeight: 600 }}>{manager.name}</div>
-                      <div style={{ fontSize: 12, color: isLight ? "#64748b" : "#9ca3af" }}>ผู้ดูแลโปรเจกต์</div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ fontSize: 13, color: isLight ? "#94a3b8" : "#9ca3af" }}>ยังไม่มีผู้จัดการที่กำกับดูแล</div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -243,7 +234,7 @@ function InfoCard({ label, value, isLight }: { label: string; value: string; isL
 function WebsiteCard({ website, isLight, projectId }: { website: string; isLight: boolean; projectId?: number }) {
   const cleanWebsite = website?.trim() ?? ""
   const currentOrigin = typeof window !== "undefined" ? window.location.origin : ""
-  
+
   const href = (cleanWebsite && !cleanWebsite.startsWith("http://localhost:3000"))
     ? (cleanWebsite.startsWith("http://") || cleanWebsite.startsWith("https://") ? cleanWebsite : `https://${cleanWebsite}`)
     : (currentOrigin ? `${currentOrigin}/dashboard/projects/${projectId || ""}` : `/dashboard/projects/${projectId || ""}`)

@@ -1,14 +1,11 @@
-
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount,markRepliesAsRead } from "../database/route"
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
 import type { JwtPayload } from "jsonwebtoken"
 import path from "path"
-
 const UPLOADS_DIR = path.join(__dirname, "../uploads")
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
-
 const authCheck = ({ headers, set }: any) => {
   const authHeader = headers["authorization"]
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -28,11 +25,9 @@ const authCheck = ({ headers, set }: any) => {
     return { message: "Token ไม่ถูกต้องหรือหมดอายุ" }
   }
 }
-
 new Elysia()
   .use(cors())
   .get("/", () => "Server is running!")
-
   // Public Guest Preview Endpoint (No Auth required)
   .get("/api/guest/preview/:token", async ({ params, set }) => {
     try {
@@ -46,7 +41,6 @@ new Elysia()
       return { message: err.message || "ไม่พบโปรเจคที่ต้องการดู" }
     }
   })
-
   // Git Pulse GitHub Proxy Endpoint
   .get("/api/gitpulse", async ({ query, set }) => {
     const requestedRepo = query?.repo ? String(query.repo) : ""
@@ -87,8 +81,6 @@ new Elysia()
       return { message: "เกิดข้อผิดพลาดขณะเชื่อมต่อ GitHub" }
     }
   })
-
-
   // Admin: Generate Share Token
   .post("/api/admin/projects/:id/share-token", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -105,15 +97,12 @@ new Elysia()
       return { message: err.message }
     }
   })
-
-
   .post("/api/register", async ({ body, set }) => {
     const { username, email, password } = body as {
       username?: string
       email?: string
       password?: string
     }
-
     try {
       const user = await register(
         username ?? "",
@@ -138,14 +127,12 @@ new Elysia()
       }
     }
   })
-
   .post("/api/login", async ({ body, set }) => {
     const { username, email, password } = body as {
       username?: string
       email?: string
       password?: string
     }
-
     if (!username?.trim() || !email?.trim() || !password) {
       set.status = 400
 
@@ -173,27 +160,22 @@ new Elysia()
       }
     }
   })
-
   .get("/api/profile", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return { message: "ยินดีต้อนรับ!", user: await getProfile(result.id) }
   })
-
   .get("/api/projects", ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getProjects(result.id)
   })
-
   .post("/api/projects", async ({ headers, set, body }) => {
     const auth = authCheck({ headers, set })
-
     if (set.status === 401) {
       return auth
     }
-
-   const {
+    const {
       name,
       description,
       domain,
@@ -212,7 +194,6 @@ new Elysia()
       token?: string
       user_id?: number
     }
-
     const cleanName = name?.trim()
     const cleanDescription = description?.trim() ?? ""
 
@@ -223,10 +204,8 @@ new Elysia()
         message: "กรุณากรอกชื่อโปรเจค",
       }
     }
-
-   // เฉพาะแอดมินเท่านั้นที่เลือกเจ้าของโปรเจคเองได้ ลูกค้าทั่วไปเป็นเจ้าของโปรเจคตัวเองเสมอ
+    // เฉพาะแอดมินเท่านั้นที่เลือกเจ้าของโปรเจคเองได้ ลูกค้าทั่วไปเป็นเจ้าของโปรเจคตัวเองเสมอ
     const ownerId = auth.role === "admin" && user_id ? Number(user_id) : auth.id
-
     try {
       const project = await createProject(
         cleanName,
@@ -238,7 +217,7 @@ new Elysia()
         token?.trim(),
         website?.trim()
       )
-      
+
       await createLog(
         auth.id,
         project.id,
@@ -258,7 +237,6 @@ new Elysia()
       }
     }
   })
-
   // Admin: ดูทุก project (ต้องเป็น admin)
   .get("/api/admin/projects", ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -269,7 +247,6 @@ new Elysia()
     }
     return getAllProjects()
   })
-
   /// Admin: อัปเดตสถานะโปรเจค + แจ้งเตือน
   .put("/api/admin/projects/:id", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -311,7 +288,6 @@ new Elysia()
     )
     return updated
   })
-
   // Admin: ดู users ทั้งหมด
   .get("/api/admin/users", ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -322,7 +298,6 @@ new Elysia()
     }
     return getAllUsers()
   })
-
   // Customer: อัปเดตโปรเจคของตัวเอง
   .put("/api/projects/:id", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -335,7 +310,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // Admin: ลบโปรเจค
   .delete("/api/admin/projects/:id", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -346,22 +320,18 @@ new Elysia()
     }
     return deleteProject(Number(params.id))
   })
-
   // Refresh Token
   .post("/api/refresh", ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return refreshToken(result.id)
   })
-
-
   // Customer: Dashboard ของตัวเอง
   .get("/api/dashboard", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getDashboardSummary(result.id)
   })
-
   // Customer/Admin: ดู health โปรเจคเดียว
   .get("/api/projects/:id/health", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -373,7 +343,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // Admin: Dashboard ภาพรวมทุก user
   .get("/api/admin/dashboard", ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -384,7 +353,6 @@ new Elysia()
     }
     return getAdminDashboard()
   })
-
   // Admin: อัปเดต progress โปรเจค
   .put("/api/admin/projects/:id/progress", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -402,10 +370,8 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // จำนวน notification ที่ยังไม่อ่าน
   .get("/api/unread-count", async ({ headers, set }) => {
-
     const result = authCheck({ headers, set })
 
     if (set.status === 401)
@@ -415,17 +381,13 @@ new Elysia()
       result.id,
       result.role
     )
-
   })
-
-
   // Customer: ดูการแจ้งเตือนของตัวเอง
   .get("/api/notifications", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getNotifications(result.id)
   })
-
   // Customer: กดอ่านแล้ว (ทีละอัน)
   .patch("/api/notifications/:id/read", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -441,7 +403,6 @@ new Elysia()
   .patch("/api/feedbacks/:id/read", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-
     try {
       return await markFeedbackAsRead(Number(params.id))
     } catch (err: any) {
@@ -449,14 +410,12 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // Customer: กดอ่านทั้งหมด
   .patch("/api/notifications/read-all", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return markAllAsRead(result.id)
   })
-
   // Customer: ลบการแจ้งเตือน
   .delete("/api/notifications/:id", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -468,14 +427,12 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // ดู comment ทั้งหมดในโปรเจค
   .get("/api/projects/:id/comments", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getComments(Number(params.id))
   })
-
   // เพิ่ม comment
   .post("/api/projects/:id/comments", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -487,7 +444,6 @@ new Elysia()
     }
     return createComment(Number(params.id), result.id, content)
   })
-
   // ลบ comment
   .delete("/api/comments/:commentId", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -505,12 +461,10 @@ new Elysia()
     if (set.status === 401) return result
     return getFiles(Number(params.id))
   })
-
   // อัปโหลดไฟล์
   .post("/api/projects/:id/files", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-
     const { file } = body as any
     if (!file) {
       set.status = 400
@@ -527,7 +481,6 @@ new Elysia()
 
     return saveFile(Number(params.id), result.id, filename, filepath, filesize)
   })
-
   // ลบไฟล์
   .delete("/api/files/:id", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -539,14 +492,12 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // ดู log ของโปรเจค
   .get("/api/projects/:id/logs", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getProjectLogs(Number(params.id))
   })
-
   // Admin: ดู log ทั้งหมด
   .get("/api/admin/logs", ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -557,7 +508,6 @@ new Elysia()
     }
     return getAllLogs()
   })
-
   // Admin: เช็ค Milestone ที่ใกล้ครบกำหนด
   .get("/api/admin/milestones/check-due", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -568,14 +518,12 @@ new Elysia()
     }
     return checkMilestoneDue()
   })
-
   // ดู milestone ทั้งหมดของโปรเจค
   .get("/api/projects/:id/milestones", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getMilestones(Number(params.id))
   })
-
   // Admin: สร้าง milestone
   .post("/api/projects/:id/milestones", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -587,7 +535,6 @@ new Elysia()
     const { title, description, start_date, end_date, phase } = body as any
     return createMilestone(Number(params.id), title, description, start_date, end_date, phase)
   })
-
   // Admin: อัปเดต milestone
   .put("/api/milestones/:id", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -604,7 +551,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // Admin: ลบ milestone
   .delete("/api/milestones/:id", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -620,7 +566,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // Customer: สร้าง Ticket
   .post("/api/projects/:id/feedbacks", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -632,14 +577,12 @@ new Elysia()
     }
     return createFeedback(Number(params.id), result.id, title, message, priority || "medium")
   })
-
   // ดู Ticket ทั้งหมดของโปรเจค
   .get("/api/projects/:id/feedbacks", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getFeedbacks(Number(params.id))
   })
-
   // Admin: ดู Ticket ทั้งหมดในระบบ
   .get("/api/admin/feedbacks", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -650,7 +593,6 @@ new Elysia()
     }
     return getAllFeedbacks()
   })
-
   // Admin: เปลี่ยนสถานะ Ticket
   .patch("/api/admin/feedbacks/:id/status", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -667,7 +609,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // ตอบกลับ Ticket
   .post("/api/feedbacks/:id/replies", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -679,7 +620,6 @@ new Elysia()
     }
     return createFeedbackReply(Number(params.id), result.id, message)
   })
-
   // ดูการตอบกลับของ Ticket
   .get("/api/feedbacks/:id/replies", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -692,14 +632,12 @@ new Elysia()
     if (set.status === 401) return result
     return await markRepliesAsRead(Number(params.id), result.id)
   })
-
   // Customer: รายงานโปรเจคของตัวเอง
   .get("/api/reports", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getReport(result.id)
   })
-
   // Admin: รายงานภาพรวมทุกโปรเจค
   .get("/api/admin/reports", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -710,14 +648,13 @@ new Elysia()
     }
     return getAdminReport()
   })
-
   // Public Guest Preview (ไม่ต้อง Auth)
   .get("/api/guest/preview/:token", async ({ params, set }) => {
     const { token } = params
     try {
       const allProjects = await getAllProjects()
       const found = allProjects.find(
-        (p: any) => p.share_token === token || `demo-${p.id}` === token || String(p.id) === token
+        (p: any) => p.share_token === token || `demo - ${ p.id }` === token || String(p.id) === token
       )
       if (found) {
         return { project: found }
@@ -725,8 +662,8 @@ new Elysia()
       return {
         project: {
           id: 1,
-          name: `Guest Demo Project`,
-          domain: "http://localhost:3000/dashboard/projects",
+          name: "Guest Demo Project",
+          domain: "",
           view_count: 1,
         }
       }
@@ -734,22 +671,19 @@ new Elysia()
       return {
         project: {
           id: 1,
-          name: `Guest Demo Project`,
-          domain: "http://localhost:3000/dashboard/projects",
+          name: "Guest Demo Project",
+          domain: "",
           view_count: 1,
         }
       }
     }
   })
-
-
   // ดูสถานะ Maintenance Mode (ทุกคนดูได้)
   .get("/api/maintenance", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getMaintenanceStatus()
   })
-
   // Admin: เปิด/ปิด Maintenance Mode
   .patch("/api/admin/maintenance", async ({ headers, set, body }) => {
     const result = authCheck({ headers, set })
@@ -761,7 +695,6 @@ new Elysia()
     const { is_active, message } = body as any
     return setMaintenanceMode(is_active, message)
   })
-
   // Customer: บันทึกเวลาที่คลิกลิงก์ใน Notification
   .patch("/api/notifications/:id/click", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -773,7 +706,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // รับข้อมูล Webhook จาก GitHub
   .post("/api/webhook/git-push", async ({ body, set }) => {
     try {
@@ -788,14 +720,12 @@ new Elysia()
       const pushed_at = payload?.repository?.pushed_at
         ? new Date(payload.repository.pushed_at * 1000).toISOString()
         : new Date().toISOString()
-
       return await saveWebhook(event, pusher, branch, commit_message, commit_url, repository, pushed_at)
     } catch (err: any) {
       set.status = 400
       return { message: "รับข้อมูลไม่สำเร็จ" }
     }
   })
-
   // ดู Webhook ทั้งหมด
   .get("/api/webhook/git-push", async ({ headers, set }) => {
     const result = authCheck({ headers, set })
@@ -818,7 +748,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // เปลี่ยนรหัสผ่าน
   .put("/api/profile/password", async ({ headers, set, body }) => {
     const result = authCheck({ headers, set })
@@ -835,14 +764,12 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // ดูผู้ดูแลโปรเจค
   .get("/api/projects/:id/members", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getProjectMembers(Number(params.id))
   })
-
   // Admin: เพิ่มผู้ดูแลโปรเจค
   .post("/api/projects/:id/members", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
@@ -858,7 +785,6 @@ new Elysia()
     }
     return addProjectMember(Number(params.id), name, role || "ผู้ดูแลโปรเจค")
   })
-
   // Admin: ลบผู้ดูแลโปรเจค
   .delete("/api/members/:id", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
@@ -874,7 +800,6 @@ new Elysia()
       return { message: err.message }
     }
   })
-
   // เสิร์ฟไฟล์จาก uploads folder
   .get("/uploads/:filename", async ({ params, set }) => {
     const filepath = path.join(UPLOADS_DIR, params.filename)
@@ -886,9 +811,5 @@ new Elysia()
     }
     return new Response(file)
   })
-
-
-
   .listen({ port: 4000, hostname: "0.0.0.0" })
-
 console.log("Server running on port 4000 (0.0.0.0)")

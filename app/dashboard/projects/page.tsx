@@ -291,19 +291,41 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={S.cardName}>{p.name}</div>
           {p.website ? (
-            <a
-              href={normalizeWebsiteUrl(p.website)}
-              target="_blank"
-              rel="noreferrer"
-              style={S.cardWebsite}
-              onClick={(event) => event.stopPropagation()}
-            >
-              🌐 {p.website}
-            </a>
+            <div style={{ marginTop: 4 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#4f8ef7",
+                  marginBottom: 2,
+                }}
+              >
+                
+              </div>
+
+              <a
+                href={normalizeWebsiteUrl(p.website)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                style={{
+                  ...S.cardWebsite,
+                  display: "block",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={p.website}
+              >
+                {p.website}
+              </a>
+            </div>
           ) : (
-            <span style={S.cardWebsite}>
-              🌐 ยังไม่ได้ระบุเว็บไซต์
-            </span>
+            <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 12 }}>🌐</div>
+              <span style={S.cardWebsite}>
+                ยังไม่ได้ระบุเว็บไซต์
+              </span>
+            </div>
           )}
         </div>
         <span style={{ ...S.badge, background: color + "22", color, border: `1px solid ${color}44` }}>{label}</span>
@@ -329,13 +351,6 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex" }}>
-          {p.managers.map((m, i) => (
-            <div key={m.id} title={m.name} style={{ width: 28, height: 28, borderRadius: "50%", background: m.color + "33", color: m.color, border: "2px solid #111827", marginLeft: i > 0 ? -8 : 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, position: "relative", zIndex: p.managers.length - i }}>
-              {m.avatar}
-            </div>
-          ))}
-        </div>
       </div>
       <Link
         href={detailHref}

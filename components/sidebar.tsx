@@ -81,17 +81,25 @@ export default function Sidebar() {
   useEffect(() => {
     if (!mounted) return;
 
-    backend.unreadCount()
-      .then((data: any) => {
-        setNotifCount(data.notifications || 0)
-        setFeedbackUnread(data.feedbacks || 0)
-      })
-      .catch(() => {
-        setNotifCount(0)
-        setFeedbackUnread(0)
-      })
+    const loadUnread = () => {
+      backend.unreadCount()
+        .then((data: any) => {
+          setNotifCount(data.notifications || 0)
+          setFeedbackUnread(data.feedbacks || 0)
+        })
+        .catch(() => {
+          setNotifCount(0)
+          setFeedbackUnread(0)
+        });
+    };
 
-  }, [pathname, mounted])
+    loadUnread();
+
+    const interval = setInterval(loadUnread, 5000);
+
+    return () => clearInterval(interval);
+
+  }, [mounted]);
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
