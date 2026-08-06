@@ -157,7 +157,8 @@ export async function updateAdminProject(
   start_date?: string,
   package_name?: string,
   token?: string,
-  website?: string
+  website?: string,
+  user_id?: number        // ✅ เพิ่ม parameter นี้
 ) {
   await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS website TEXT;`)
   const result = await db.query(
@@ -169,9 +170,10 @@ export async function updateAdminProject(
        start_date = COALESCE($5, start_date),
        package = COALESCE($6, package),
        token = COALESCE($7, token),
-       website = COALESCE($9, website)
+       website = COALESCE($9, website),
+       user_id = COALESCE($10, user_id)
      WHERE id = $8 RETURNING *`,
-    [name, description, status, domain, start_date || null, package_name, token, id, website]
+    [name, description, status, domain, start_date || null, package_name, token, id, website, user_id || null]
   )
   if (!result.rows.length) throw new Error("ไม่พบโปรเจค")
   return result.rows[0]

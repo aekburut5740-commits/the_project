@@ -273,7 +273,18 @@ new Elysia()
       set.status = 403
       return { message: "ไม่มีสิทธิ์เข้าถึง" }
     }
-    const { status, url, name, description, domain, website, start_date, package: package_name, token } = body as any
+    const {
+      status,
+      url,
+      name,
+      description,
+      domain,
+      website,
+      start_date,
+      package: package_name,
+      token,
+      user_id
+    } = body as any
     const updated = await updateAdminProject(
       Number(params.id),
       name,
@@ -283,7 +294,8 @@ new Elysia()
       start_date,
       package_name,
       token,
-      website
+      website,
+      user_id
     )
     // สร้าง notification อัตโนมัติ พร้อมแนบ URL
     await createNotification(

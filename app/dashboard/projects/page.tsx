@@ -144,6 +144,7 @@ export default function ProjectsPage() {
           start_date: updated.startDate,
           package: updated.package,
           token: updated.token,
+          user_id: updated.ownerId || undefined,
         })) as Project
         const managers = isAdmin ? await addNewManagers(created.id, updated.managers) : []
         setProjects((prev) => [...prev, { ...created, managers }])
@@ -159,6 +160,7 @@ export default function ProjectsPage() {
             start_date: updated.startDate,
             package: updated.package,
             token: updated.token,
+            user_id: updated.ownerId,
           }, true)
           await backend.updateProgress(updated.id, updated.progress)
           await syncManagers(updated.id, old?.managers || [], updated.managers)
@@ -411,6 +413,9 @@ function EditModal({
     }))
   }
 
+  console.log("form.ownerId:", form.ownerId)
+  console.log("customers:", customers)
+
   return (
     <div style={S.overlay} onClick={onClose}>
       <div style={S.modal} onClick={(e) => e.stopPropagation()}>
@@ -446,20 +451,18 @@ function EditModal({
             onChange={(e) => set("ownerId", Number(e.target.value))}
             style={S.input}
           >
+            <option value={0}>เลือกลูกค้า</option>
 
-            <option value={0}>
-              เลือกลูกค้า
-            </option>
+            {/* ✅ เพิ่มส่วนนี้ — แสดง option ปัจจุบันถ้าไม่อยู่ใน list */}
+            {form.ownerId > 0 && !customers.some((c: any) => c.id === form.ownerId) && (
+              <option value={form.ownerId}>ลูกค้า #{form.ownerId} (ไม่พบในระบบ)</option>
+            )}
 
             {customers.map((customer: any) => (
-              <option
-                key={customer.id}
-                value={customer.id}
-              >
+              <option key={customer.id} value={customer.id}>
                 {customer.username}
               </option>
             ))}
-
           </select>
           <SLabel label="ข้อมูลเทคนิค (Git & Package)" />
           <Field label="แพ็กเกจ" isLight={isLight}>
@@ -474,7 +477,15 @@ function EditModal({
           {!isCreating && <button onClick={() => { if (confirm("ลบโปรเจคนี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบโปรเจค</button>}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={onClose} style={S.cancelBtn}>ยกเลิก</button>
-            <button onClick={() => onSave(form)} style={S.saveBtn}>บันทึก</button>
+            <button
+              onClick={() => {
+                console.log("กดบันทึกแล้ว", form)
+                onSave(form)
+              }}
+              style={S.saveBtn}
+            >
+              บันทึก
+            </button>
           </div>
         </div>
       </div>
