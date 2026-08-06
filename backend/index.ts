@@ -1,5 +1,5 @@
 
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount } from "../database/route"
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount,markRepliesAsRead } from "../database/route"
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -193,7 +193,7 @@ new Elysia()
       return auth
     }
 
-    const {
+   const {
       name,
       description,
       domain,
@@ -201,6 +201,7 @@ new Elysia()
       start_date,
       package: packageName,
       token,
+      user_id,
     } = body as {
       name?: string
       description?: string
@@ -209,6 +210,7 @@ new Elysia()
       start_date?: string
       package?: string
       token?: string
+      user_id?: number
     }
 
     const cleanName = name?.trim()
@@ -222,18 +224,21 @@ new Elysia()
       }
     }
 
+   // เฉพาะแอดมินเท่านั้นที่เลือกเจ้าของโปรเจคเองได้ ลูกค้าทั่วไปเป็นเจ้าของโปรเจคตัวเองเสมอ
+    const ownerId = auth.role === "admin" && user_id ? Number(user_id) : auth.id
+
     try {
       const project = await createProject(
         cleanName,
         cleanDescription,
-        auth.id,
+        ownerId,
         domain?.trim(),
         start_date,
         packageName,
         token?.trim(),
         website?.trim()
       )
-
+      
       await createLog(
         auth.id,
         project.id,
@@ -273,6 +278,7 @@ new Elysia()
       set.status = 403
       return { message: "ไม่มีสิทธิ์เข้าถึง" }
     }
+<<<<<<< HEAD
     const {
       status,
       url,
@@ -285,6 +291,9 @@ new Elysia()
       token,
       user_id
     } = body as any
+=======
+    const { status, url, name, description, domain, website, start_date, package: package_name, token, user_id } = body as any
+>>>>>>> 7dbc9d8d32bbf76e544b7fae9bc9958c469395e1
     const updated = await updateAdminProject(
       Number(params.id),
       name,
@@ -295,7 +304,11 @@ new Elysia()
       package_name,
       token,
       website,
+<<<<<<< HEAD
       user_id
+=======
+      user_id ? Number(user_id) : undefined
+>>>>>>> 7dbc9d8d32bbf76e544b7fae9bc9958c469395e1
     )
     // สร้าง notification อัตโนมัติ พร้อมแนบ URL
     await createNotification(
@@ -680,6 +693,12 @@ new Elysia()
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getFeedbackReplies(Number(params.id))
+  })
+  // ทำเครื่องหมายว่าอ่านข้อความตอบกลับในทิกเก็ตนี้แล้ว
+  .patch("/api/feedbacks/:id/replies/read", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return await markRepliesAsRead(Number(params.id), result.id)
   })
 
   // Customer: รายงานโปรเจคของตัวเอง
