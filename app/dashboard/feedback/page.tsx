@@ -6,6 +6,7 @@ import { MessageSquare, Plus, RefreshCw, Send } from "lucide-react"
 import { backend, normalizeProject } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
 import { useTheme } from "@/lib/themeContext"
+import { useCurrentUser } from "@/lib/useCurrentUser"
 
 type UserRole = "admin" | "customer"
 type FeedbackStatus = "sent" | "in_progress" | "resolved"
@@ -57,12 +58,12 @@ import { Suspense } from "react"
 
 function FeedbackContent() {
   const { theme } = useTheme()
+  const { user: rawUser, isAdmin, mounted } = useCurrentUser()
+  const user = rawUser ?? { id: 0, username: "", role: "customer" as UserRole }
   const isLight = theme === "light"
   const S = getStyles(isLight)
   const searchParams = useSearchParams()
   const requestedProjectId = Number(searchParams.get("project"))
-  const user = getUser() || { id: 0, username: "", role: "customer" as const }
-  const isAdmin = user.role === "admin"
 
   const [projects, setProjects] = useState<Project[]>([])
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
@@ -109,10 +110,10 @@ function FeedbackContent() {
       const rows = isAdmin
         ? await backend.allFeedbacks()
         : (
-            await Promise.all(
-              nextProjects.map((project) => backend.feedbacks(project.id).catch(() => [])),
-            )
-          ).flat()
+          await Promise.all(
+            nextProjects.map((project) => backend.feedbacks(project.id).catch(() => [])),
+          )
+        ).flat()
 
       const nextFeedbacks = await Promise.all(
         rows.map(async (row: any) => {
@@ -152,27 +153,27 @@ function FeedbackContent() {
   }, [requestedProjectId])
 
   async function handleSelect(id: number) {
-  setSelectedId(id)
+    setSelectedId(id)
 
-  const feedback = feedbacks.find((f) => f.id === id)
+    const feedback = feedbacks.find((f) => f.id === id)
 
-  if (feedback && !feedback.isRead) {
+    if (feedback && !feedback.isRead) {
 
-    setFeedbacks((previous) =>
-      previous.map((f) =>
-        f.id === id
-          ? { ...f, isRead: true }
-          : f
+      setFeedbacks((previous) =>
+        previous.map((f) =>
+          f.id === id
+            ? { ...f, isRead: true }
+            : f
+        )
       )
-    )
 
-    try {
-      await backend.markFeedbackRead(id)
-    } catch (err) {
-      console.error(err)
+      try {
+        await backend.markFeedbackRead(id)
+      } catch (err) {
+        console.error(err)
+      }
     }
   }
-}
 
   async function handleCreate(data: {
     title: string
@@ -235,10 +236,10 @@ function FeedbackContent() {
         previous.map((item) =>
           item.id === feedbackId
             ? {
-                ...item,
-                comments: comments.map((row: any) => normalizeReply(row, user)),
-                updatedAt: new Date(),
-              }
+              ...item,
+              comments: comments.map((row: any) => normalizeReply(row, user)),
+              updatedAt: new Date(),
+            }
             : item,
         ),
       )

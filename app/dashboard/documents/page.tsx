@@ -66,18 +66,15 @@ function normalizeDocument(file: any): DocumentWithUrl {
 }
 
 import { Suspense } from "react"
+import { useCurrentUser } from "@/lib/useCurrentUser"
 
 function DocumentsContent() {
   const { theme } = useTheme()
+  const { user: tokenUser, isAdmin, mounted } = useCurrentUser()
   const isLight = theme === "light"
   const S = getStyles(isLight)
   const searchParams = useSearchParams()
   const requestedProject = searchParams.get("project")
-
-  const [mounted, setMounted] = useState(false)
-  const [user, setUser] = useState<any>(null)
-
-  const isAdmin = user?.role === "admin"
 
   const [projects, setProjects] = useState<Project[]>([])
   const [docs, setDocs] = useState<DocumentWithUrl[]>([])
@@ -89,11 +86,6 @@ function DocumentsContent() {
   const [filterCategory, setFilterCategory] = useState<DocCategory | "all">("all")
   const [showUpload, setShowUpload] = useState(false)
   const [previewDoc, setPreviewDoc] = useState<DocumentWithUrl | null>(null)
-
-  useEffect(() => {
-    setMounted(true)
-    setUser(getUser())
-  }, [])
 
   const myProjects = projects
 

@@ -15,6 +15,7 @@ import {
 import { getUser, setToken } from "@/lib/auth"
 import { backend } from "@/lib/backend"
 import { useTheme } from "@/lib/themeContext"
+import { useCurrentUser } from "@/lib/useCurrentUser"
 
 type Tab = "account" | "notifications" | "users" | "system"
 
@@ -23,6 +24,7 @@ type ProfileUser = {
   username: string
   email?: string
   role: "admin" | "customer" | string
+  avatar?: string
 }
 
 type SystemUser = {
@@ -65,9 +67,9 @@ function getInitials(username: string) {
 
 export default function SettingsPage() {
   const { theme } = useTheme()
+  const { user: tokenUser, isAdmin, mounted } = useCurrentUser()
+  
   const isLight = theme === "light"
-  const tokenUser = getUser()
-  const isAdmin = tokenUser?.role === "admin"
 
   const [activeTab, setActiveTab] = useState<Tab>("account")
 
@@ -113,6 +115,7 @@ export default function SettingsPage() {
         role: String(
           profileResponse?.user?.role ?? tokenUser?.role ?? "customer"
         ),
+        avatar: profileResponse?.user?.avatar ?? "",
       }
 
       setProfile(loadedProfile)
@@ -312,29 +315,29 @@ export default function SettingsPage() {
     icon: React.ReactNode
     adminOnly?: boolean
   }> = [
-    {
-      id: "account",
-      label: "ข้อมูลบัญชี",
-      icon: <UserRound size={17} />,
-    },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: <Bell size={17} />,
-    },
-    {
-      id: "users",
-      label: "จัดการผู้ใช้",
-      icon: <UsersRound size={17} />,
-      adminOnly: true,
-    },
-    {
-      id: "system",
-      label: "ระบบ",
-      icon: <Wrench size={17} />,
-      adminOnly: true,
-    },
-  ]
+      {
+        id: "account",
+        label: "ข้อมูลบัญชี",
+        icon: <UserRound size={17} />,
+      },
+      {
+        id: "notifications",
+        label: "Notifications",
+        icon: <Bell size={17} />,
+      },
+      {
+        id: "users",
+        label: "จัดการผู้ใช้",
+        icon: <UsersRound size={17} />,
+        adminOnly: true,
+      },
+      {
+        id: "system",
+        label: "ระบบ",
+        icon: <Wrench size={17} />,
+        adminOnly: true,
+      },
+    ]
 
   return (
     <main className={`min-h-screen ${isLight ? "bg-slate-50 text-slate-900" : "bg-slate-950 text-slate-100"}`}>
@@ -364,11 +367,10 @@ export default function SettingsPage() {
         {(message || error) && (
           <div
             role="status"
-            className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
-              error
-                ? "border-red-800 bg-red-950/50 text-red-300"
-                : "border-emerald-800 bg-emerald-950/50 text-emerald-300"
-            }`}
+            className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${error
+              ? "border-red-800 bg-red-950/50 text-red-300"
+              : "border-emerald-800 bg-emerald-950/50 text-emerald-300"
+              }`}
           >
             {error || message}
           </div>
@@ -382,7 +384,7 @@ export default function SettingsPage() {
 
             <nav className="space-y-2">
               {tabs
-                .filter((tab) => !tab.adminOnly || isAdmin)
+                .filter((tab) => !tab.adminOnly || (mounted && isAdmin))
                 .map((tab) => (
                   <button
                     key={tab.id}
@@ -391,11 +393,10 @@ export default function SettingsPage() {
                       setActiveTab(tab.id)
                       clearStatus()
                     }}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${
-                      activeTab === tab.id
-                        ? (isLight ? "bg-blue-600 text-white shadow-sm" : "bg-slate-800 text-white shadow-inner")
-                        : (isLight ? "bg-slate-50 text-slate-700 hover:bg-slate-100" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800")
-                    }`}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition ${activeTab === tab.id
+                      ? (isLight ? "bg-blue-600 text-white shadow-sm" : "bg-slate-800 text-white shadow-inner")
+                      : (isLight ? "bg-slate-50 text-slate-700 hover:bg-slate-100" : "bg-slate-950/70 text-slate-300 hover:bg-slate-800")
+                      }`}
                   >
                     {tab.icon}
                     {tab.label}
@@ -405,8 +406,12 @@ export default function SettingsPage() {
 
             <div className={`rounded-2xl border p-4 ${isLight ? "border-slate-200 bg-slate-50" : "border-slate-800 bg-slate-950/70"}`}>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 font-bold text-slate-950">
-                  {getInitials(profile.username)}
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sky-500 font-bold text-slate-950">
+                  {profile.avatar ? (
+                    <img src={profile.avatar} alt={profile.username} className="h-full w-full object-cover" />
+                  ) : (
+                    getInitials(profile.username)
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className={`truncate text-sm font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>
@@ -578,11 +583,10 @@ export default function SettingsPage() {
                       role="switch"
                       aria-checked={notificationsEnabled}
                       onClick={handleNotificationToggle}
-                      className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
-                        notificationsEnabled
-                          ? "bg-sky-500 text-slate-950"
-                          : "bg-slate-800 text-slate-200"
-                      }`}
+                      className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${notificationsEnabled
+                        ? "bg-sky-500 text-slate-950"
+                        : "bg-slate-800 text-slate-200"
+                        }`}
                     >
                       <Bell size={16} className="mr-2" />
                       {notificationsEnabled ? "เปิดแล้ว" : "ปิดแล้ว"}
@@ -665,11 +669,10 @@ export default function SettingsPage() {
                         </div>
 
                         <span
-                          className={`w-fit rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${
-                            item.role === "admin"
-                              ? "border-violet-700 bg-violet-950/50 text-violet-300"
-                              : "border-sky-800 bg-sky-950/50 text-sky-300"
-                          }`}
+                          className={`w-fit rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${item.role === "admin"
+                            ? "border-violet-700 bg-violet-950/50 text-violet-300"
+                            : "border-sky-800 bg-sky-950/50 text-sky-300"
+                            }`}
                         >
                           {item.role}
                         </span>
@@ -722,11 +725,10 @@ export default function SettingsPage() {
                       onClick={() =>
                         setMaintenanceMode((current) => !current)
                       }
-                      className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
-                        maintenanceMode
-                          ? "bg-rose-500 text-white"
-                          : "bg-emerald-500 text-slate-950"
-                      }`}
+                      className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${maintenanceMode
+                        ? "bg-rose-500 text-white"
+                        : "bg-emerald-500 text-slate-950"
+                        }`}
                     >
                       {maintenanceMode ? "เปิดอยู่" : "ปิดอยู่"}
                     </button>
