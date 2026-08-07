@@ -11,6 +11,8 @@ import {
 import { getUser } from "@/lib/auth";
 import { backend } from "@/lib/backend";
 import { useTheme } from "@/lib/themeContext";
+import { useRouter } from "next/navigation"
+import { removeToken } from "@/lib/auth"
 
 function ThemeToggleButton() {
   const { theme, toggleTheme } = useTheme();
@@ -48,6 +50,7 @@ interface ProfileInfo {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter()
   const [mounted, setMounted] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [notifCount, setNotifCount] = useState(0);
@@ -59,6 +62,11 @@ export default function Sidebar() {
   const [nameError, setNameError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
+
+  function handleLogout() {
+    removeToken()
+    router.push("/login")
+  }
   useEffect(() => {
     setMounted(true);
     const jwtUser = getUser();
@@ -213,10 +221,11 @@ export default function Sidebar() {
           <span>Settings</span>
         </Link>
         <ThemeToggleButton />
-        <Link href="/login"
+        <button
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors">
           <LogOut size={17} /><span>Logout</span>
-        </Link>
+        </button>
 
         <div className="border-t border-gray-200 dark:border-white/10 my-2" />
 
