@@ -69,7 +69,13 @@ export const backend = {
   updateMilestone: (id: number, body: any) => apiFetch(`/api/milestones/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteMilestone: (id: number) => apiFetch(`/api/milestones/${id}`, { method: "DELETE" }),
   files: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/files`),
-  uploadFile: (projectId: number, file: File) => { const body = new FormData(); body.append("file", file); return apiFetch(`/api/projects/${projectId}/files`, { method: "POST", body }) },
+uploadFile: (projectId: number, file: File, category?: string, isConfidential?: boolean) => { 
+  const body = new FormData(); 
+  body.append("file", file); 
+  if (category) body.append("category", category)
+  if (isConfidential !== undefined) body.append("is_confidential", String(isConfidential))
+  return apiFetch(`/api/projects/${projectId}/files`, { method: "POST", body }) 
+},
   deleteFile: (id: number) => apiFetch(`/api/files/${id}`, { method: "DELETE" }),
   feedbacks: (projectId: number) => apiFetch<any[]>(`/api/projects/${projectId}/feedbacks`),
   allFeedbacks: () => apiFetch<any[]>("/api/admin/feedbacks"),
