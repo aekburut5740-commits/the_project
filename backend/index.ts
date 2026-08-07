@@ -659,36 +659,7 @@ new Elysia()
     }
     return getAdminReport()
   })
-  // Public Guest Preview (ไม่ต้อง Auth)
-  .get("/api/guest/preview/:token", async ({ params, set }) => {
-    const { token } = params
-    try {
-      const allProjects = await getAllProjects()
-      const found = allProjects.find(
-        (p: any) => p.share_token === token || `demo - ${ p.id }` === token || String(p.id) === token
-      )
-      if (found) {
-        return { project: found }
-      }
-      return {
-        project: {
-          id: 1,
-          name: "Guest Demo Project",
-          domain: "",
-          view_count: 1,
-        }
-      }
-    } catch {
-      return {
-        project: {
-          id: 1,
-          name: "Guest Demo Project",
-          domain: "",
-          view_count: 1,
-        }
-      }
-    }
-  })
+ 
   // ดูสถานะ Maintenance Mode (ทุกคนดูได้)
   .get("/api/maintenance", async ({ headers, set }) => {
     const result = authCheck({ headers, set })

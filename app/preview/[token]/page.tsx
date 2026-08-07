@@ -66,23 +66,12 @@ export default function GuestPreviewPage() {
     if (token) loadGuestPreview()
   }, [token])
 
-  const basePreviewUrl = project?.domain || project?.website || "http://localhost:3000"
+const basePreviewUrl = project?.website || project?.domain || "http://localhost:3000"
   
   const activePreviewUrl = selectedCommit 
     ? (basePreviewUrl.startsWith("http") ? `${basePreviewUrl}?commit=${selectedCommit.id.substring(0, 7)}` : `https://${basePreviewUrl}?commit=${selectedCommit.id.substring(0, 7)}`)
     : (basePreviewUrl.startsWith("http") ? basePreviewUrl : `https://${basePreviewUrl}`)
-
-  useEffect(() => {
-    if (project && !loading) {
-      let targetUrl = project?.domain || project?.website || ""
-      if (!targetUrl || targetUrl === "https://example.com" || targetUrl === "http://localhost:3000") {
-        targetUrl = "/dashboard/projects"
-      } else if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://") && !targetUrl.startsWith("/")) {
-        targetUrl = `https://${targetUrl}`
-      }
-      window.location.replace(targetUrl)
-    }
-  }, [project, loading])
+  
 
   if (loading) {
     return (

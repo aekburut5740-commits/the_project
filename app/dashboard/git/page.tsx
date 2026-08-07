@@ -159,22 +159,32 @@ export default function GitPage() {
     }
   }
 
-  const handleGenerateShareLink = async () => {
-    // สำหรับ Local Environment: ดึง URL ของโปรเจกต์ที่เลือก หรือ fallback ไปที่หน้าโครงการภายในระบบทันที
-    let targetLink = selectedProject?.website || ""
-    if (!targetLink || targetLink === "https://example.com" || !targetLink.startsWith("http")) {
-      targetLink = typeof window !== "undefined" ? `${window.location.origin}/dashboard/projects/${selectedProject?.id || ""}` : "/dashboard/projects"
+ const handleGenerateShareLink = async () => {
+  if (!selectedProject?.id) return
+
+  try {
+    // 1. เรียก backend สร้าง share token จริง (หรือดึงตัวเดิมถ้ามีอยู่แล้ว)
+    const updated = await backend.generateShareToken(selectedProject.id)
+    const realToken = updated?.share_token
+
+    if (!realToken) {
+      throw new Error("ไม่ได้รับ share token จาก backend")
     }
 
-    try {
-      await navigator.clipboard.writeText(targetLink)
-      setCopiedLink(true)
-      setTimeout(() => setCopiedLink(false), 2500)
-    } catch (err) {
-      console.error("Clipboard copy failed:", err)
-      alert(`Local Project Link:\n${targetLink}`)
-    }
+    setShareToken(realToken)
+
+    // 2. สร้างลิงก์ไปหน้า preview สาธารณะ (ไม่ใช่หน้า dashboard ที่ต้อง login)
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    const targetLink = `${origin}/preview/${realToken}`
+
+    await navigator.clipboard.writeText(targetLink)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2500)
+  } catch (err) {
+    console.error("Generate share link failed:", err)
+    alert("สร้างลิงก์แชร์ไม่สำเร็จ ลองใหม่อีกครั้ง")
   }
+}
 
   // Theme Styles Object
   const S = getStyles(isLight)
