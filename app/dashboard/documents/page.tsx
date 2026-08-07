@@ -73,8 +73,12 @@ function DocumentsContent() {
   const S = getStyles(isLight)
   const searchParams = useSearchParams()
   const requestedProject = searchParams.get("project")
-  const user = getUser()
+
+  const [mounted, setMounted] = useState(false)
+  const [user, setUser] = useState<any>(null)
+
   const isAdmin = user?.role === "admin"
+
   const [projects, setProjects] = useState<Project[]>([])
   const [docs, setDocs] = useState<DocumentWithUrl[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,12 +90,25 @@ function DocumentsContent() {
   const [showUpload, setShowUpload] = useState(false)
   const [previewDoc, setPreviewDoc] = useState<DocumentWithUrl | null>(null)
 
+  useEffect(() => {
+    setMounted(true)
+    setUser(getUser())
+  }, [])
+
   const myProjects = projects
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       setError("")
+
+      if (!mounted) {
+        return (
+          <div style={{ padding: 32 }}>
+            กำลังโหลด...
+          </div>
+        )
+      }
 
       try {
         const data = await backend.projects(isAdmin)
@@ -240,7 +257,7 @@ function DocumentsContent() {
                           setDocs((prev) => prev.filter((d) => d.id !== doc.id))
                         } catch (err) { setError(err instanceof Error ? err.message : "ลบเอกสารไม่สำเร็จ") }
                       }
-                    }} 
+                    }}
                     isLight={isLight} />
                 ))}
               </div>
@@ -311,9 +328,9 @@ function UploadModal({ projects, uploading, onClose, onUpload, isLight = false }
 
   function getFileType(name: string): Document["fileType"] {
     const ext = name.split(".").pop()?.toLowerCase()
-    if (["jpg","jpeg","png","gif","webp"].includes(ext||"")) return "image"
+    if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext || "")) return "image"
     if (ext === "pdf") return "pdf"
-    if (["doc","docx","txt","md"].includes(ext||"")) return "doc"
+    if (["doc", "docx", "txt", "md"].includes(ext || "")) return "doc"
     return "other"
   }
 
@@ -359,7 +376,7 @@ function UploadModal({ projects, uploading, onClose, onUpload, isLight = false }
           <button disabled={!selectedFile || !form.projectId || uploading}
             onClick={() => selectedFile && form.projectId && onUpload({
               name: selectedFile.name, projectId: form.projectId, category: form.category,
-              size: selectedFile.size > 1048576 ? `${(selectedFile.size/1048576).toFixed(1)} MB` : `${(selectedFile.size/1024).toFixed(0)} KB`,
+              size: selectedFile.size > 1048576 ? `${(selectedFile.size / 1048576).toFixed(1)} MB` : `${(selectedFile.size / 1024).toFixed(0)} KB`,
               uploadedBy: "Admin", uploadedAt: new Date().toISOString().split("T")[0],
               isConfidential: form.isConfidential, fileType: getFileType(selectedFile.name),
             }, selectedFile)}
