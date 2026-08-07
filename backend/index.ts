@@ -465,7 +465,7 @@ new Elysia()
   .post("/api/projects/:id/files", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
-    const { file } = body as any
+    const { file, category, is_confidential } = body as any
     if (!file) {
       set.status = 400
       return { message: "กรุณาเลือกไฟล์" }
@@ -479,8 +479,17 @@ new Elysia()
     // บันทึกไฟล์ลงในเครื่อง
     await Bun.write(filepath, file)
 
-    return saveFile(Number(params.id), result.id, filename, filepath, filesize)
+    return saveFile(
+      Number(params.id),
+      result.id,
+      filename,
+      filepath,
+      filesize,
+      category,
+      is_confidential === "true" || is_confidential === true
+    )
   })
+  
   // ลบไฟล์
   .delete("/api/files/:id", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })

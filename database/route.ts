@@ -454,11 +454,13 @@ export async function deleteNotification(notification_id: number, user_id: numbe
 // ===== FILE UPLOAD =====
 
 // บันทึกข้อมูลไฟล์ลง Database
-export async function saveFile(project_id: number, user_id: number, filename: string, filepath: string, filesize: number) {
+export async function saveFile(project_id: number, user_id: number, filename: string, filepath: string, filesize: number, category?: string, is_confidential?: boolean) {
+  await db.query(`ALTER TABLE files ADD COLUMN IF NOT EXISTS category TEXT;`)
+  await db.query(`ALTER TABLE files ADD COLUMN IF NOT EXISTS is_confidential BOOLEAN DEFAULT FALSE;`)
   const result = await db.query(
-    `INSERT INTO files (project_id, user_id, filename, filepath, filesize) 
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [project_id, user_id, filename, filepath, filesize]
+    `INSERT INTO files (project_id, user_id, filename, filepath, filesize, category, is_confidential) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [project_id, user_id, filename, filepath, filesize, category || null, is_confidential ?? false]
   )
   return result.rows[0]
 }
