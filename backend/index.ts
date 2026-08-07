@@ -280,12 +280,14 @@ new Elysia()
       user_id
     )
     // สร้าง notification อัตโนมัติ พร้อมแนบ URL
-    await createNotification(
-      updated.user_id,
-      updated.id,
-      `โปรเจค "${updated.name}" ถูกเปลี่ยนสถานะเป็น "${status}"`,
-      url || null
-    )
+    if (updated.user_id) {
+  await createNotification(
+    updated.user_id,
+    updated.id,
+    `Admin อัปเดตโปรเจค "${updated.name}"${status ? ` → สถานะ "${status}"` : ""}`,
+    `/dashboard/projects/${updated.id}`
+  )
+}
     return updated
   })
   // Admin: ดู users ทั้งหมด
