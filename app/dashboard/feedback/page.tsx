@@ -325,8 +325,11 @@ function FeedbackContent() {
                   onClick={() => setFilterStatus(status)}
                   style={{
                     ...S.tabBtn,
-                    background: filterStatus === status ? "#1f2937" : "transparent",
-                    color: filterStatus === status ? "#f9fafb" : "#6b7280",
+                    background:
+                      filterStatus === status
+                        ? (isLight ? "#e6eefb" : "#1f2937")
+                        : "transparent",
+                    color: filterStatus === status ? (isLight ? "#0f172a" : "#f9fafb") : (isLight ? "#475569" : "#6b7280"),
                   }}
                 >
                   {status === "all" ? "ทั้งหมด" : FEEDBACK_STATUS_CONFIG[status].label}
@@ -351,8 +354,8 @@ function FeedbackContent() {
                       onClick={() => handleSelect(feedback.id)}
                       style={{
                         ...S.feedbackItem,
-                        background: isSelected ? "#1e3a5f" : "#0d1117",
-                        borderColor: isSelected ? "#4f8ef7" : "#1f2937",
+                        background: isSelected ? (isLight ? "#e6f0ff" : "#1e3a5f") : (isLight ? "#ffffff" : "#0d1117"),
+                        borderColor: isSelected ? (isLight ? "#bfdbfe" : "#4f8ef7") : (isLight ? "#e2e8f0" : "#1f2937"),
                         borderLeftColor: color,
                         textAlign: "left",
                       }}
@@ -362,7 +365,7 @@ function FeedbackContent() {
                           style={{
                             fontSize: 13,
                             fontWeight: isAdmin && !feedback.isRead ? 700 : 500,
-                            color: "#f9fafb",
+                            color: isLight ? "#0f172a" : "#f9fafb",
                             flex: 1,
                             lineHeight: 1.4,
                           }}
@@ -484,10 +487,10 @@ function FeedbackDetail({
       <div style={{ padding: "20px 24px", borderBottom: "1px solid #1f2937", flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: "#f9fafb", marginBottom: 4 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", marginBottom: 4 }}>
               {feedback.title || "ไม่มีหัวข้อ"}
             </div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
+            <div style={{ fontSize: 12, color: isLight ? "#475569" : "#6b7280" }}>
               โดย {feedback.authorName} · {projectName} · {formatDate(feedback.createdAt)}
             </div>
           </div>
@@ -571,10 +574,14 @@ function FeedbackDetail({
               <div style={{ maxWidth: "68%" }}>
                 <div
                   style={{
-                    background: isMe ? "#1e3a5f" : "#1f2937",
+                    background: isMe
+                      ? (isLight ? "#dbeafe" : "#1e3a5f")
+                      : (isLight ? "#f1f5f9" : "#1f2937"),
                     borderRadius: isMe ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
                     padding: "10px 14px",
-                    border: `1px solid ${isMe ? "#2d5a9a" : "#374151"}`,
+                    border: `1px solid ${isMe
+                      ? (isLight ? "#bfdbfe" : "#2d5a9a")
+                      : (isLight ? "#e2e8f0" : "#374151")}`,
                   }}
                 >
                   <div
@@ -588,9 +595,8 @@ function FeedbackDetail({
                     {comment.authorName}
                     {comment.authorRole === "admin" ? " · Admin" : ""}
                   </div>
-                  <div style={{ fontSize: 13, color: "#e5e7eb", lineHeight: 1.6 }}>{comment.message}</div>
-                </div>
-                <div style={{ fontSize: 10, color: "#374151", marginTop: 3, textAlign: isMe ? "right" : "left" }}>
+                  <div style={{ fontSize: 13, color: isLight ? "#0f172a" : "#e5e7eb", lineHeight: 1.6 }}>{comment.message}</div>                </div>
+                <div style={{ fontSize: 10, color: isLight ? "#94a3b8" : "#374151", marginTop: 3, textAlign: isMe ? "right" : "left" }}>
                   {formatTime(comment.createdAt)}
                 </div>
               </div>
