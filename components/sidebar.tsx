@@ -103,7 +103,7 @@ export default function Sidebar() {
 
     loadUnread();
 
-    const interval = setInterval(loadUnread, 5000);
+    const interval = setInterval(loadUnread, 30000);
 
     return () => clearInterval(interval);
 
