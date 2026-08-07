@@ -18,7 +18,20 @@ interface NotificationItem {
 export default function NotificationsPage() {
   const { theme } = useTheme()
   const isLight = theme === "light"
-  const S = getStyles(isLight)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
   const user = getUser()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -171,12 +184,12 @@ function NotificationGroup({ title, items, onMarkRead, onDelete, isLight = false
   )
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
   return {
     page: {
       background: isLight ? "#f8fafc" : "#0d1117",
       minHeight: "100vh",
-      padding: "28px 32px",
+      padding: isMobile ? "14px 12px" : "28px 32px",
       fontFamily: "'DM Sans','Segoe UI',sans-serif",
       color: isLight ? "#0f172a" : "#e5e7eb",
     },
@@ -186,7 +199,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       alignItems: "center",
       marginBottom: 16,
     },
-    title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
+    title: { fontSize: isMobile ? 20 : 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
     subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
     markAllBtn: {
       display: "flex",
@@ -212,7 +225,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     notifCard: {
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
       borderRadius: 14,
-      padding: "14px 16px",
+      padding: isMobile ? "10px 12px" : "14px 16px",
       display: "flex",
       alignItems: "center",
       gap: 12,
@@ -220,9 +233,9 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
     },
     iconWrap: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
+      width: isMobile ? 34 : 40,
+      height: isMobile ? 34 : 40,
+      borderRadius: 10,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -262,7 +275,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       flexDirection: "column" as const,
       alignItems: "center",
       justifyContent: "center",
-      padding: "80px 0",
+      padding: isMobile ? "40px 0" : "80px 0",
       color: isLight ? "#94a3b8" : "#4b5563",
     },
   }

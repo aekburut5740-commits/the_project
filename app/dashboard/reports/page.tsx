@@ -76,11 +76,11 @@ const FEEDBACK_STATUS: Record<string, { label: string; color: string }> = {
   completed: { label: "เสร็จสิ้น", color: "#34d399" },
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
   return {
     page: {
       minHeight: "100vh",
-      padding: "28px 32px",
+      padding: isMobile ? "14px 12px" : "28px 32px",
       background: isLight ? "#f8fafc" : "#0b1220",
       color: isLight ? "#0f172a" : "#e5e7eb",
       fontFamily: "'Inter', 'Segoe UI', sans-serif",
@@ -96,7 +96,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     title: {
       margin: 0,
       color: isLight ? "#0f172a" : "#f9fafb",
-      fontSize: 30,
+      fontSize: isMobile ? 20 : 30,
       fontWeight: 800,
       letterSpacing: "-0.03em",
     },
@@ -182,7 +182,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     },
     grid: {
       display: "grid",
-      gridTemplateColumns: "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
+      gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.15fr) minmax(320px, 0.85fr)",
       gap: 18,
       alignItems: "start",
     },
@@ -292,7 +292,20 @@ import { Suspense } from "react"
 function ReportsContent() {
   const { theme } = useTheme()
   const isLight = theme === "light"
-  const styles = getStyles(isLight)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  const styles = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
   const searchParams = useSearchParams()
   const requestedProjectId = toNumber(searchParams.get("project"))
   const currentUser = getUser()

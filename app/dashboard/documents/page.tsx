@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { FileText, FileImage, File, Download, Trash2, Upload, Search, FolderOpen, Eye, Lock } from "lucide-react"
 import { getUser } from "@/lib/auth"
@@ -72,7 +72,20 @@ function DocumentsContent() {
   const { theme } = useTheme()
   const { user: tokenUser, isAdmin, mounted } = useCurrentUser()
   const isLight = theme === "light"
-  const S = getStyles(isLight)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
   const searchParams = useSearchParams()
   const requestedProject = searchParams.get("project")
 
@@ -452,11 +465,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><label style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>{label}</label>{children}</div>
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
   return {
-    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
+    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: isMobile ? "14px 12px" : "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "e5e7eb" },
     header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-    title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
+    title: { fontSize: isMobile ? 20 : 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
     subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
     addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
     roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
@@ -467,8 +480,8 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     select: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 12px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", cursor: "pointer" },
     groupHeader: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: isLight ? "#334155" : "#9ca3af", marginBottom: 12 },
     groupCount: { fontSize: 11, color: isLight ? "#64748b" : "#4b5563", marginLeft: 4 },
-    docGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 },
-    docCard: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 12, padding: "16px", display: "flex", flexDirection: "column", gap: 6, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    docGrid: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 },
+    docCard: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 12, padding: isMobile ? "10px" : "16px", display: "flex", flexDirection: "column", gap: 6, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
     fileIcon: { width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" },
     confBadge: { display: "flex", alignItems: "center", gap: 3, background: "#f871711a", border: "1px solid #f8717133", borderRadius: 999, padding: "2px 7px", color: "#f87171", fontSize: 10, fontWeight: 700 },
     docName: { fontSize: 12, fontWeight: 600, color: isLight ? "#0f172a" : "#f9fafb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
@@ -476,7 +489,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     docMeta: { display: "flex", justifyContent: "space-between", fontSize: 11, color: isLight ? "#64748b" : "#374151", marginTop: 2 },
     docActions: { display: "flex", gap: 6, marginTop: 4, paddingTop: 8, borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1a2232" },
     actionBtn: { background: isLight ? "#f1f5f9" : "#1f2937", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 6, color: isLight ? "#334155" : "#9ca3af", padding: "5px 8px", cursor: "pointer", display: "flex", alignItems: "center" },
-    empty: { color: isLight ? "#94a3b8" : "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
+    empty: { color: isLight ? "#94a3b8" : "#374151", fontSize: 14, textAlign: "center", padding: isMobile ? "36px 0" : "60px 0", fontStyle: "italic" },
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
     modal: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 460, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
     modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },

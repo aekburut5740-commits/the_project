@@ -61,13 +61,27 @@ function FeedbackContent() {
   const { user: rawUser, isAdmin, mounted } = useCurrentUser()
   const user = rawUser ?? { id: 0, username: "", role: "customer" as UserRole }
   const isLight = theme === "light"
-  const S = getStyles(isLight)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
   const searchParams = useSearchParams()
   const requestedProjectId = Number(searchParams.get("project"))
 
   const [projects, setProjects] = useState<Project[]>([])
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [showChat, setShowChat] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<number | "all">(
     Number.isFinite(requestedProjectId) && requestedProjectId > 0 ? requestedProjectId : "all",
   )
@@ -154,6 +168,7 @@ function FeedbackContent() {
 
   async function handleSelect(id: number) {
     setSelectedId(id)
+    setShowChat(false)
 
     const feedback = feedbacks.find((f) => f.id === id)
 
@@ -424,6 +439,9 @@ function FeedbackContent() {
                 onStatusChange={handleStatusChange}
                 onComment={handleComment}
                 isLight={isLight}
+                isMobile={isMobile}
+                showChat={showChat}
+                onToggleChat={() => setShowChat((previous) => !previous)}
               />
             )}
           </div>
@@ -454,6 +472,9 @@ function FeedbackDetail({
   onStatusChange,
   onComment,
   isLight = false,
+  isMobile = false,
+  showChat = false,
+  onToggleChat,
 }: {
   feedback: Feedback
   isAdmin: boolean
@@ -464,8 +485,11 @@ function FeedbackDetail({
   onStatusChange: (id: number, status: FeedbackStatus) => void | Promise<void>
   onComment: (id: number, message: string) => void | Promise<void>
   isLight?: boolean
+  isMobile?: boolean
+  showChat?: boolean
+  onToggleChat: () => void
 }) {
-  const S = getStyles(isLight)
+  const S = getStyles(isLight, isMobile)
   const [newComment, setNewComment] = useState("")
   const { color: statusColor, label: statusLabel } = FEEDBACK_STATUS_CONFIG[feedback.status]
   const { color: priorityColor, label: priorityLabel } = FEEDBACK_PRIORITY_CONFIG[feedback.priority]
@@ -546,88 +570,103 @@ function FeedbackDetail({
         <p style={S.descriptionBox}>{feedback.description || "ไม่มีรายละเอียด"}</p>
       </div>
 
-      <div style={S.commentsBody}>
-        {feedback.comments.length === 0 && (
-          <div style={S.noComments}>ยังไม่มีความคิดเห็น — เริ่มการสนทนาได้เลย</div>
-        )}
+      {isMobile && (
+        <div style={S.chatHeader}>
+          <button onClick={onToggleChat} style={S.chatToggleBtn}>
+            {showChat ? "ปิดแชท" : `เปิดแชท (${feedback.comments.length})`}
+          </button>
+        </div>
+      )}
 
-        {feedback.comments.map((comment) => {
-          const isMe = comment.authorId === currentUserId
-          const initial = comment.authorName.trim().charAt(0).toUpperCase() || "?"
+      {(!isMobile || showChat) ? (
+        <>
+          <div style={S.commentsBody}>
+            {feedback.comments.length === 0 ? (
+              <div style={S.noComments}>ยังไม่มีความคิดเห็น — เริ่มการสนทนาได้เลย</div>
+            ) : (
+              feedback.comments.map((comment) => {
+                const isMe = comment.authorId === currentUserId
+                const initial = comment.authorName.trim().charAt(0).toUpperCase() || "?"
 
-          return (
-            <div
-              key={comment.id}
-              style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 10, alignItems: "flex-start" }}
-            >
-              <div
-                style={{
-                  ...S.avatar,
-                  background: comment.authorRole === "admin" ? "#4f8ef722" : "#34d39922",
-                  color: comment.authorRole === "admin" ? "#4f8ef7" : "#34d399",
-                  border: `1px solid ${comment.authorRole === "admin" ? "#4f8ef744" : "#34d39944"}`,
-                }}
-              >
-                {initial}
-              </div>
-
-              <div style={{ maxWidth: "68%" }}>
-                <div
-                  style={{
-                    background: isMe
-                      ? (isLight ? "#dbeafe" : "#1e3a5f")
-                      : (isLight ? "#f1f5f9" : "#1f2937"),
-                    borderRadius: isMe ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
-                    padding: "10px 14px",
-                    border: `1px solid ${isMe
-                      ? (isLight ? "#bfdbfe" : "#2d5a9a")
-                      : (isLight ? "#e2e8f0" : "#374151")}`,
-                  }}
-                >
+                return (
                   <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: comment.authorRole === "admin" ? "#4f8ef7" : "#34d399",
-                      marginBottom: 5,
-                    }}
+                    key={comment.id}
+                    style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", gap: 10, alignItems: "flex-start" }}
                   >
-                    {comment.authorName}
-                    {comment.authorRole === "admin" ? " · Admin" : ""}
-                  </div>
-                  <div style={{ fontSize: 13, color: isLight ? "#0f172a" : "#e5e7eb", lineHeight: 1.6 }}>{comment.message}</div>                </div>
-                <div style={{ fontSize: 10, color: isLight ? "#94a3b8" : "#374151", marginTop: 3, textAlign: isMe ? "right" : "left" }}>
-                  {formatTime(comment.createdAt)}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+                    <div
+                      style={{
+                        ...S.avatar,
+                        background: comment.authorRole === "admin" ? "#4f8ef722" : "#34d39922",
+                        color: comment.authorRole === "admin" ? "#4f8ef7" : "#34d399",
+                        border: `1px solid ${comment.authorRole === "admin" ? "#4f8ef744" : "#34d39944"}`,
+                      }}
+                    >
+                      {initial}
+                    </div>
 
-      <div style={S.commentInputRow}>
-        <input
-          value={newComment}
-          disabled={replying}
-          onChange={(event) => setNewComment(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault()
-              void submit()
-            }
-          }}
-          placeholder={isAdmin ? "ตอบกลับลูกค้า..." : "พิมพ์ความคิดเห็น..."}
-          style={{ ...S.input, flex: 1 }}
-        />
-        <button
-          onClick={() => void submit()}
-          disabled={!newComment.trim() || replying}
-          style={{ ...S.sendBtn, opacity: !newComment.trim() || replying ? 0.5 : 1 }}
-          title="ส่ง"
-        >
-          <Send size={15} />
-        </button>
-      </div>
+                    <div style={{ maxWidth: "68%" }}>
+                      <div
+                        style={{
+                          background: isMe
+                            ? (isLight ? "#dbeafe" : "#1e3a5f")
+                            : (isLight ? "#f1f5f9" : "#1f2937"),
+                          borderRadius: isMe ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
+                          padding: "10px 14px",
+                          border: `1px solid ${isMe
+                            ? (isLight ? "#bfdbfe" : "#2d5a9a")
+                            : (isLight ? "#e2e8f0" : "#374151")}`,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: comment.authorRole === "admin" ? "#4f8ef7" : "#34d399",
+                            marginBottom: 5,
+                          }}
+                        >
+                          {comment.authorName}
+                          {comment.authorRole === "admin" ? " · Admin" : ""}
+                        </div>
+                        <div style={{ fontSize: 13, color: isLight ? "#0f172a" : "#e5e7eb", lineHeight: 1.6 }}>{comment.message}</div>
+                      </div>
+                      <div style={{ fontSize: 10, color: isLight ? "#94a3b8" : "#374151", marginTop: 3, textAlign: isMe ? "right" : "left" }}>
+                        {formatTime(comment.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <div style={S.commentInputRow}>
+            <input
+              value={newComment}
+              disabled={replying}
+              onChange={(event) => setNewComment(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault()
+                  void submit()
+                }
+              }}
+              placeholder={isAdmin ? "ตอบกลับลูกค้า..." : "พิมพ์ความคิดเห็น..."}
+              style={{ ...S.input, flex: 1 }}
+            />
+            <button
+              onClick={() => void submit()}
+              disabled={!newComment.trim() || replying}
+              style={{ ...S.sendBtn, opacity: !newComment.trim() || replying ? 0.5 : 1 }}
+              title="ส่ง"
+            >
+              <Send size={15} />
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={S.chatPlaceholder}>กดปุ่มเปิดแชทเพื่อดูข้อความ</div>
+      )}
     </div>
   )
 }
@@ -836,21 +875,21 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })
 }
 
-function getStyles(isLight: boolean): Record<string, CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, CSSProperties> {
   return {
-    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
-    header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 16 },
+    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: isMobile ? "14px 12px" : "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
+    header: { display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", flexWrap: isMobile ? "wrap" : "nowrap", marginBottom: 16, gap: 16 },
     title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
     subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
-    addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: "9px 18px", cursor: "pointer" },
-    secondaryBtn: { display: "flex", alignItems: "center", gap: 7, background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: isLight ? "#334155" : "#9ca3af", fontSize: 13, fontWeight: 600, padding: "9px 14px", cursor: "pointer" },
+    addBtn: { display: "flex", alignItems: "center", gap: 7, background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, padding: isMobile ? "8px 14px" : "9px 18px", cursor: "pointer", whiteSpace: "nowrap" },
+    secondaryBtn: { display: "flex", alignItems: "center", gap: 7, background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: isLight ? "#334155" : "#9ca3af", fontSize: 13, fontWeight: 600, padding: isMobile ? "8px 12px" : "9px 14px", cursor: "pointer", whiteSpace: "nowrap" },
     roleBadge: { fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999 },
     filterRow: { display: "flex", gap: 10, marginBottom: 14 },
-    contentGrid: { display: "grid", gridTemplateColumns: "minmax(280px, 320px) minmax(0, 1fr)", gap: 14, height: "calc(100vh - 280px)", minHeight: 520 },
-    listPanel: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
-    detailPanel: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    contentGrid: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 320px) minmax(0, 1fr)", gap: 14, height: isMobile ? "auto" : "calc(100vh - 280px)", minHeight: isMobile ? "auto" : 520 },
+    listPanel: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none", padding: isMobile ? 8 : undefined },
+    detailPanel: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", borderRadius: 14, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none", padding: isMobile ? 8 : undefined },
     tabBtn: { border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" },
-    listBody: { flex: 1, overflowY: "auto", padding: 10, display: "flex", flexDirection: "column", gap: 8 },
+    listBody: { flex: 1, overflowY: "auto", padding: isMobile ? 8 : 10, display: "flex", flexDirection: "column", gap: 8 },
     feedbackItem: { border: "1px solid", borderLeft: "3px solid", borderRadius: 10, padding: "12px 14px", cursor: "pointer", transition: "all 0.15s", width: "100%" },
     unreadDot: { width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0, marginTop: 2 },
     badge: { fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" },
@@ -861,10 +900,13 @@ function getStyles(isLight: boolean): Record<string, CSSProperties> {
     errorBox: { color: isLight ? "#991b1b" : "#fca5a5", background: isLight ? "#fef2f2" : "#7f1d1d33", border: isLight ? "1px solid #fca5a5" : "1px solid #ef444455", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 },
     noSelection: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12, color: isLight ? "#64748b" : "#9ca3af" },
     descriptionBox: { fontSize: 13, color: isLight ? "#334155" : "#9ca3af", lineHeight: 1.6, margin: 0, background: isLight ? "#f8fafc" : "#0d1117", border: isLight ? "1px solid #e2e8f0" : "none", borderRadius: 8, padding: "12px 14px", whiteSpace: "pre-wrap" },
-    commentsBody: { flex: 1, overflowY: "auto", padding: "16px 24px", display: "flex", flexDirection: "column", gap: 14 },
+    chatHeader: { padding: isMobile ? "12px 16px" : "16px 24px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", background: isLight ? "#f8fafc" : "#0f1119", display: "flex", justifyContent: "flex-end" },
+    chatToggleBtn: { background: "transparent", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: isLight ? "#334155" : "#f9fafb", padding: "8px 14px", cursor: "pointer", fontSize: 13 },
+    chatPlaceholder: { color: isLight ? "#64748b" : "#9ca3af", fontSize: 13, textAlign: "center", padding: "24px 16px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
+    commentsBody: { flex: 1, overflowY: "auto", padding: isMobile ? "12px 16px" : "16px 24px", display: "flex", flexDirection: "column", gap: 14 },
     noComments: { color: isLight ? "#94a3b8" : "#374151", fontSize: 13, textAlign: "center", padding: "32px 0", fontStyle: "italic" },
     avatar: { width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 },
-    commentInputRow: { padding: "12px 24px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", display: "flex", gap: 10, flexShrink: 0 },
+    commentInputRow: { padding: isMobile ? "10px 16px" : "12px 24px", borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937", display: "flex", gap: 10, flexShrink: 0 },
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
     modal: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
     modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
