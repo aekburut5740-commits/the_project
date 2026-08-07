@@ -161,7 +161,7 @@ function DocumentsContent() {
     setError("")
 
     try {
-      const response: any = await backend.uploadFile(newDoc.projectId, file)
+      const response: any = await backend.uploadFile(newDoc.projectId, file, newDoc.category, newDoc.isConfidential)
       const saved = normalizeDocument({
         ...response,
         project_id: (response as any)?.project_id ?? newDoc.projectId,
