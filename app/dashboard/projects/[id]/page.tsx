@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { use, useEffect, useState } from "react"
+import { use, useEffect, useMemo, useState } from "react"
 import { backend, normalizeProject } from "@/lib/backend"
 import { getUser } from "@/lib/auth"
 import { STATUS_CONFIG } from "@/lib/project-config"
@@ -12,7 +12,20 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params)
   const { theme } = useTheme()
   const isLight = theme === "light"
-  const S = getStyles(isLight)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
 
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -83,7 +96,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div style={S.page}>
-      <Link href="/dashboard/projects" style={{ color: "#4f8ef7", textDecoration: "none", fontSize: 14, fontWeight: 600, display: "inline-block", marginBottom: 20 }}>
+      <Link href="/dashboard/projects" style={{ color: "#4f8ef7", textDecoration: "none", fontSize: 14, fontWeight: 600, display: "inline-block", marginBottom: isMobile ? 16 : 20 }}>
         ← กลับไปหน้าโปรเจค
       </Link>
 
@@ -160,20 +173,20 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   )
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
   return {
     page: {
       minHeight: "100vh",
       background: isLight ? "#f8fafc" : "#0d1117",
       color: isLight ? "#0f172a" : "#e5e7eb",
-      padding: "28px 32px",
+      padding: isMobile ? "18px 14px" : "28px 32px",
       fontFamily: "'DM Sans','Segoe UI',sans-serif",
     },
     card: {
       background: isLight ? "#ffffff" : "#111827",
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
       borderRadius: 16,
-      padding: 24,
+      padding: isMobile ? 18 : 24,
       display: "flex",
       flexDirection: "column" as const,
       gap: 18,
@@ -183,7 +196,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       background: isLight ? "#f8fafc" : "#0d1117",
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
       borderRadius: 12,
-      padding: "16px 18px",
+      padding: isMobile ? "14px 16px" : "16px 18px",
     },
   }
 }

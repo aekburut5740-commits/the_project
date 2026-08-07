@@ -344,7 +344,7 @@ export default function SettingsPage() {
       <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-8">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-white">Settings</h1>
+            <h1 className={`text-3xl font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>Settings</h1>
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
               จัดการข้อมูลบัญชี รหัสผ่าน และการตั้งค่าที่ระบบรองรับจริง
             </p>
@@ -557,7 +557,7 @@ export default function SettingsPage() {
                   <p className="text-sm uppercase tracking-[0.24em] text-slate-500">
                     Notifications
                   </p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">
+                  <h2 className={`mt-3 text-2xl font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>
                     การแจ้งเตือนของบัญชี
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
@@ -608,7 +608,7 @@ export default function SettingsPage() {
                   <p className="text-sm uppercase tracking-[0.24em] text-slate-500">
                     Users
                   </p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">
+                  <h2 className={`mt-3 text-2xl font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>
                     รายชื่อผู้ใช้ในระบบ
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">

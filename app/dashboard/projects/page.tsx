@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { STATUS_CONFIG } from "@/lib/project-config"
 
@@ -32,7 +32,7 @@ export default function ProjectsPage() {
   const [isMobile, setIsMobile] = useState(false)
   const [isTablet, setIsTablet] = useState(false)
 
-  const S = getStyles(isLight, isMobile, isTablet)
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
 
   useEffect(() => {
     function handleResize() {
@@ -263,7 +263,15 @@ export default function ProjectsPage() {
       ) : (
         <div style={S.grid}>
           {filtered.map((p) => (
-            <ProjectCard key={p.id} project={p} isAdmin={isAdmin} onEdit={() => { setIsCreating(false); setEditingProject(p) }} isLight={isLight} />
+            <ProjectCard
+              key={p.id}
+              project={p}
+              isAdmin={isAdmin}
+              onEdit={() => { setIsCreating(false); setEditingProject(p) }}
+              isLight={isLight}
+              isMobile={isMobile}
+              isTablet={isTablet}
+            />
           ))}
         </div>
       )}
@@ -280,6 +288,8 @@ export default function ProjectsPage() {
           onSave={handleSave}
           onDelete={handleDelete}
           isLight={isLight}
+          isMobile={isMobile}
+          isTablet={isTablet}
           customers={customers}
         />
       )}
@@ -287,8 +297,8 @@ export default function ProjectsPage() {
   )
 }
 
-function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project: Project; isAdmin: boolean; onEdit: () => void; isLight?: boolean }) {
-  const S = getStyles(isLight)
+function ProjectCard({ project: p, isAdmin, onEdit, isLight = false, isMobile = false, isTablet = false }: { project: Project; isAdmin: boolean; onEdit: () => void; isLight?: boolean; isMobile?: boolean; isTablet?: boolean }) {
+  const S = getStyles(isLight, isMobile, isTablet)
   const statusConfig = STATUS_CONFIG[p.status] || {
     label: p.status || "ไม่ระบุสถานะ",
     color: "#6b7280",
@@ -297,9 +307,28 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project
   const { color, label } = statusConfig
   const detailHref = `/dashboard/projects/${p.id}`
 
+  const cardStyle = { ...S.card, padding: isMobile ? "16px" : "15px 15px 5px 15px", overflow: "hidden" }
+  const topRowStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: isMobile ? "stretch" : "flex-start",
+    flexDirection: isMobile ? "column" : "row",
+    gap: 12,
+  }
+  const metaRowStyle = {
+    ...S.metaRow,
+    flexDirection: isMobile ? "column" : "row",
+  }
+  const actionsRowStyle = {
+    borderTop: isAdmin ? "1px solid #1f2937" : "none",
+    padding: isMobile ? "14px 16px 18px" : "12px 22px 20px",
+    display: "flex",
+    justifyContent: isMobile ? "center" : "flex-end",
+  }
+
   return (
-    <div style={{ ...S.card, padding: "15px 15px 5px 15px", overflow: "hidden" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+    <div style={cardStyle}>
+      <div style={topRowStyle}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={S.cardName}>{p.name}</div>
           {p.website ? (
@@ -350,7 +379,7 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project
         </div>
         <div style={S.progressTrack}><div style={{ ...S.progressFill, width: `${Math.min(100, Math.max(0, p.progress))}%`, background: color }} /></div>
       </div>
-      <div style={S.metaRow}>
+      <div style={metaRowStyle}>
         <div style={S.metaItem}>
           <span style={S.metaLabel}>เริ่มต้น</span>
           <span style={S.metaValue}>
@@ -362,7 +391,22 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project
           <span style={{ ...S.metaValue, color: "#a78bfa" }}>{p.package}</span>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={actionsRowStyle}>
+        {isAdmin && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            style={{
+              ...S.editBtn,
+              width: isMobile ? "100%" : "auto",
+              textAlign: "center",
+            }}
+          >
+            แก้ไข
+          </button>
+        )}
       </div>
       <Link
         href={detailHref}
@@ -392,6 +436,8 @@ function EditModal({
   onSave,
   onDelete,
   isLight = false,
+  isMobile = false,
+  isTablet = false,
   customers = []
 }: {
   project: Project;
@@ -400,9 +446,11 @@ function EditModal({
   onSave: (p: Project) => void;
   onDelete: (id: number) => void;
   isLight?: boolean;
+  isMobile?: boolean;
+  isTablet?: boolean;
   customers?: any[];
 }) {
-  const S = getStyles(isLight)
+  const S = getStyles(isLight, isMobile, isTablet)
   const [form, setForm] = useState<Project>({ ...project, managers: project.managers.map((manager) => ({ ...manager })) })
 
   function set(key: keyof Project, value: any) { setForm((prev) => ({ ...prev, [key]: value })) }
@@ -499,11 +547,11 @@ function EditModal({
           <Field label="Git Repo / Domain (เช่น owner/repo)" isLight={isLight}><Input value={form.domain} onChange={(v) => set("domain", v)} placeholder="เช่น chalanon/wtemsuk หรือ aekburut5740-commits/the_project" isLight={isLight} /></Field>
           <Field label="Token / GitHub Secret" isLight={isLight}><Input value={form.token} onChange={(v) => set("token", v)} placeholder="เช่น ghp_xxxx หรือ Token ประจำโปรเจค" isLight={isLight} /></Field>
         </div>
-        <div style={{ ...S.modalFooter, justifyContent: isCreating ? "flex-end" : "space-between" }}>
-          {!isCreating && <button onClick={() => { if (confirm("ลบโปรเจคนี้?")) onDelete(form.id) }} style={S.deleteBtn}>ลบโปรเจค</button>}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onClose} style={S.cancelBtn}>ยกเลิก</button>
-            <button onClick={() => onSave(form)} style={S.saveBtn}>บันทึก</button>
+        <div style={{ ...S.modalFooter, justifyContent: isCreating ? "flex-end" : "space-between", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 10 : 0 }}>
+          {!isCreating && <button onClick={() => { if (confirm("ลบโปรเจคนี้?")) onDelete(form.id) }} style={{ ...S.deleteBtn, width: isMobile ? "100%" : "auto" }}>ลบโปรเจค</button>}
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, width: "100%" }}>
+            <button onClick={onClose} style={{ ...S.cancelBtn, width: isMobile ? "100%" : "auto" }}>ยกเลิก</button>
+            <button onClick={() => onSave(form)} style={{ ...S.saveBtn, width: isMobile ? "100%" : "auto" }}>บันทึก</button>
           </div>
         </div>
       </div>

@@ -176,8 +176,21 @@ export default function GitPage() {
     }
   }
 
-  // Theme Styles Object
-  const S = getStyles(isLight)
+  // Theme Styles Object + responsive flags
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
 
   // นับจำนวน commit จริงย้อนหลัง 7 วัน (จากชุด commit ล่าสุดที่ GitHub ส่งมา)
   const weeklyActivity = useMemo(() => {
@@ -222,7 +235,8 @@ export default function GitPage() {
             onChange={(e) => handleSelectProject(Number(e.target.value))}
             style={{
               ...S.selectInput,
-              minWidth: 200,
+              width: isMobile ? "100%" : 200,
+              maxWidth: isMobile ? "100%" : 280,
               fontWeight: 600,
               color: isLight ? "#0f172a" : "#ffffff",
               background: isLight ? "#f8fafc" : "#1f2937",
@@ -275,6 +289,8 @@ export default function GitPage() {
           disabled={linkDisabled}
           style={{
             ...S.shareBtn,
+            width: isMobile ? "100%" : "auto",
+            justifyContent: isMobile ? "center" : "flex-start",
             opacity: linkDisabled ? 0.5 : 1,
             cursor: linkDisabled ? "not-allowed" : "pointer",
             background: linkDisabled ? "#64748b" : S.shareBtn.background,
@@ -374,7 +390,7 @@ export default function GitPage() {
             </div>
 
             {/* Device Switcher Controls */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <button
                 onClick={() => setDevice("desktop")}
                 style={{ ...S.deviceBtn, background: device === "desktop" ? (isLight ? "#e0e7ff" : "#374151") : "transparent" }}
@@ -453,7 +469,8 @@ export default function GitPage() {
           <div style={S.iframeViewport}>
             <div
               style={{
-                width: device === "mobile" ? "375px" : device === "tablet" ? "768px" : "100%",
+                width: "100%",
+                maxWidth: device === "desktop" ? "100%" : device === "tablet" ? 768 : 375,
                 height: "100%",
                 transition: "all 0.3s ease",
                 margin: "0 auto",
@@ -477,22 +494,23 @@ export default function GitPage() {
   )
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
   return {
     page: {
       minHeight: "100vh",
       background: isLight ? "#f8fafc" : "#0d1117",
       color: isLight ? "#0f172a" : "#e5e7eb",
-      padding: "24px 28px",
+      padding: isMobile ? "12px 12px" : "24px 28px",
       fontFamily: "'Inter', 'DM Sans', sans-serif",
       transition: "background 0.3s ease, color 0.3s ease",
     },
     hero: {
       display: "flex",
+      flexDirection: isMobile ? "column" : "row",
       justifyContent: "space-between",
-      alignItems: "center",
+      alignItems: isMobile ? "flex-start" : "center",
       gap: 16,
-      padding: "20px 24px",
+      padding: isMobile ? "16px" : "20px 24px",
       borderRadius: 16,
       background: isLight ? "#ffffff" : "linear-gradient(135deg, rgba(31, 41, 55, 0.95), rgba(17, 24, 39, 0.95))",
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
@@ -517,9 +535,10 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     },
     controlBar: {
       display: "flex",
+      flexDirection: isMobile ? "column" : "row",
       justifyContent: "space-between",
-      alignItems: "center",
-      padding: "12px 18px",
+      alignItems: isMobile ? "stretch" : "center",
+      padding: isMobile ? "12px" : "12px 18px",
       borderRadius: 14,
       background: isLight ? "#ffffff" : "#111827",
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
@@ -572,21 +591,27 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       fontWeight: 600,
       cursor: "pointer",
     },
-    mainGrid: { display: "grid", gridTemplateColumns: "360px 1fr", gap: 16, alignItems: "stretch" },
+    mainGrid: {
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr" : isTablet ? "1fr" : "360px 1fr",
+      gap: isMobile ? 12 : 16,
+      alignItems: "stretch",
+    },
     panel: {
       background: isLight ? "#ffffff" : "#111827",
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
       borderRadius: 16,
-      padding: 16,
+      padding: isMobile ? 12 : 16,
       boxShadow: isLight ? "0 2px 8px rgba(0,0,0,0.04)" : "0 8px 20px rgba(0,0,0,0.18)",
     },
-    panelHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+    panelHeader: { display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 8 : 0, marginBottom: 12 },
     panelTitle: { fontSize: 15, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb" },
     panelSub: { fontSize: 12, color: isLight ? "#64748b" : "#6b7280" },
     repoTag: { fontSize: 11, padding: "4px 8px", borderRadius: 999, background: isLight ? "#dcfce7" : "rgba(52, 211, 153, 0.12)", color: isLight ? "#166534" : "#34d399", fontWeight: 700 },
     commitRow: {
       display: "flex",
       alignItems: "flex-start",
+      flexWrap: "wrap",
       gap: 10,
       padding: "10px 12px",
       borderRadius: 10,
@@ -594,7 +619,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       transition: "all 0.2s ease",
     },
     avatar: { width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12 },
-    commitMessage: { fontSize: 13, fontWeight: 600 },
+    commitMessage: { fontSize: 13, fontWeight: 600, wordBreak: "break-word" },
     commitTime: { fontSize: 11, color: isLight ? "#94a3b8" : "#6b7280" },
     commitMeta: { fontSize: 12, color: isLight ? "#64748b" : "#9ca3af" },
     latestBadge: { display: "flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 999, background: "rgba(16, 185, 129, 0.15)", color: "#10b981" },
@@ -605,6 +630,8 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       paddingBottom: 10,
       borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
       marginBottom: 10,
+      flexWrap: "wrap",
+      gap: 8,
     },
     commitVersionBadge: { fontSize: 12, color: "#3b82f6", background: isLight ? "#eff6ff" : "rgba(59, 130, 246, 0.15)", padding: "3px 10px", borderRadius: 999, fontWeight: 600 },
     addressBar: {
@@ -630,10 +657,10 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     },
     iframeViewport: {
       flex: 1,
-      minHeight: 520,
+      minHeight: isMobile ? 260 : isTablet ? 340 : 520,
       background: isLight ? "#f1f5f9" : "#000000",
-      borderRadius: 12,
-      padding: 12,
+      borderRadius: isMobile ? 10 : 12,
+      padding: isMobile ? 8 : 12,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",

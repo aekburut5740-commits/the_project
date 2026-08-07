@@ -84,7 +84,20 @@ import { Suspense } from "react"
 function MilestonesContent() {
   const { theme } = useTheme()
   const isLight = theme === "light"
-  const S = getStyles(isLight)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
   const searchParams = useSearchParams()
   const requestedProjectId = Number(searchParams.get("project"))
   const [isAdmin, setIsAdmin] = useState(false)
@@ -124,15 +137,7 @@ function MilestonesContent() {
 
     try {
       const projectRows = await backend.projects(adminRole)
-      const nextProjects = projectRows.map((row) => {
-        const project = normalizeProject(row)
-        return {
-          id: Number(project.id),
-          name: String(project.name ?? `Project #${project.id}`),
-          ownerId: Number(project.ownerId ?? 0),
-        }
-      })
-
+      const nextProjects = projectRows.map((row: any) => normalizeProject(row) as Project)
       setProjects(nextProjects)
 
       const milestoneGroups = await Promise.all(
@@ -150,7 +155,7 @@ function MilestonesContent() {
     } catch (err: unknown) {
       setProjects([])
       setMilestones([])
-      setError(err instanceof Error ? err.message : "ไม่สามารถโหลด Milestones ได้")
+      setError(err instanceof Error ? err.message : "ไม่สามารถโหลด Milestone ได้")
     } finally {
       setLoading(false)
     }
@@ -374,6 +379,8 @@ function MilestonesContent() {
                 setEditingMilestone(milestone)
               }}
               isLight={isLight}
+              isMobile={isMobile}
+              isTablet={isTablet}
             />
           ))}
         </div>
@@ -393,6 +400,8 @@ function MilestonesContent() {
           onSave={handleSave}
           onDelete={handleDelete}
           isLight={isLight}
+          isMobile={isMobile}
+          isTablet={isTablet}
         />
       )}
     </div>
@@ -413,14 +422,18 @@ function MilestoneCard({
   isAdmin,
   onEdit,
   isLight = false,
+  isMobile = false,
+  isTablet = false,
 }: {
   milestone: Milestone
   projectName: string
   isAdmin: boolean
   onEdit: () => void
   isLight?: boolean
+  isMobile?: boolean
+  isTablet?: boolean
 }) {
-  const S = getStyles(isLight)
+  const S = getStyles(isLight, isMobile, isTablet)
   const { color, label } = STATUS_CONFIG[milestone.status]
   const StatusIcon =
     milestone.status === "completed"
@@ -504,6 +517,8 @@ function EditModal({
   onSave,
   onDelete,
   isLight = false,
+  isMobile = false,
+  isTablet = false,
 }: {
   milestone: Milestone
   projects: Project[]
@@ -513,8 +528,10 @@ function EditModal({
   onSave: (form: MilestoneForm) => Promise<void>
   onDelete: (id: number) => Promise<void>
   isLight?: boolean
+  isMobile?: boolean
+  isTablet?: boolean
 }) {
-  const S = getStyles(isLight)
+  const S = getStyles(isLight, isMobile, isTablet)
   const [form, setForm] = useState<MilestoneForm>({
     projectId: milestone.projectId,
     title: milestone.title,
@@ -788,12 +805,12 @@ function Input({
   )
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
   return {
     page: {
       background: isLight ? "#f8fafc" : "#0d1117",
       minHeight: "100vh",
-      padding: "28px 32px",
+      padding: isMobile ? "14px 12px" : "28px 32px",
       fontFamily: "'DM Sans','Segoe UI',sans-serif",
       color: isLight ? "#0f172a" : "#e5e7eb",
     },
@@ -874,6 +891,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       gap: 12,
       marginBottom: 20,
       flexWrap: "wrap",
+      justifyContent: isMobile ? "stretch" : "flex-start",
     },
     projectSelect: {
       background: isLight ? "#ffffff" : "#111827",
@@ -883,6 +901,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       fontSize: 12,
       padding: "9px 12px",
       outline: "none",
+      minWidth: isMobile ? "100%" : undefined,
     },
     tabGroup: {
       display: "flex",
@@ -892,6 +911,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       borderRadius: 8,
       padding: 4,
       flexWrap: "wrap",
+      width: isMobile ? "100%" : undefined,
     },
     tabBtn: {
       border: "none",
@@ -906,8 +926,9 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       background: isLight ? "#ffffff" : "#111827",
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
       borderRadius: 14,
-      padding: "20px 22px",
+      padding: isMobile ? "16px" : "20px 22px",
       display: "flex",
+      flexDirection: isMobile ? "column" : "row",
       gap: 16,
       boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none",
     },
@@ -976,24 +997,25 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937",
       borderRadius: 16,
       width: "100%",
-      maxWidth: 540,
+      maxWidth: isMobile ? "100%" : 540,
       maxHeight: "85vh",
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
+      margin: isMobile ? "0" : undefined,
     },
     modalHeader: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      padding: "20px 24px",
+      padding: isMobile ? "16px 18px" : "20px 24px",
       borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
     },
     modalTitle: { fontSize: 17, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb" },
     modalSub: { fontSize: 12, color: isLight ? "#64748b" : "#6b7280", marginTop: 2 },
     closeBtn: { background: "transparent", border: "none", color: isLight ? "#64748b" : "#6b7280", fontSize: 16, cursor: "pointer" },
     modalBody: {
-      padding: "20px 24px",
+      padding: isMobile ? "16px 18px" : "20px 24px",
       overflowY: "auto",
       display: "flex",
       flexDirection: "column",
@@ -1002,7 +1024,10 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     modalFooter: {
       display: "flex",
       alignItems: "center",
-      padding: "16px 24px",
+      justifyContent: isMobile ? "center" : "space-between",
+      flexDirection: isMobile ? "column" : "row",
+      gap: isMobile ? 10 : 0,
+      padding: isMobile ? "14px 18px" : "16px 24px",
       borderTop: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
     },
     sectionLabel: {
@@ -1025,7 +1050,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       width: "100%",
       boxSizing: "border-box",
     },
-    twoColumns: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+    twoColumns: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 },
     saveBtn: {
       background: "#4f8ef7",
       border: "none",
@@ -1034,6 +1059,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
       fontSize: 13,
       fontWeight: 600,
       padding: "9px 24px",
+      width: isMobile ? "100%" : undefined,
     },
     cancelBtn: {
       background: "transparent",
