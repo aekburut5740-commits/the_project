@@ -70,7 +70,9 @@ export default function GitPage() {
         setLoading(true)
         setError(null)
         // 1. Fetch Real Projects from Backend
-        const projData = (await backend.projects(true)) as any[]
+        const user = getUser()
+        const adminRole = user?.role === "admin"
+        const projData = (await backend.projects(adminRole)) as any[]
         let initialRepo = ""
 
         if (Array.isArray(projData) && projData.length > 0) {
@@ -111,12 +113,12 @@ export default function GitPage() {
   // Compute Active Preview URL based strictly on Selected Project + Selected Commit
   const activePreviewUrl = useMemo(() => {
     let base = selectedProject?.website || ""
-    
+
     // ถ้าโปรเจคไม่ได้ระบุ website URL ไว้อย่างถูกต้อง ให้ Fallback เป็น Relative URL เพื่อป้องกัน Hydration Error
     if (!base || base === "https://example.com" || !base.startsWith("http")) {
       base = selectedProject?.id ? `/dashboard/projects/${selectedProject.id}` : "/dashboard/projects"
     }
-    
+
     if (selectedCommit) {
       const commitHash = selectedCommit.id ? selectedCommit.id.substring(0, 7) : ""
       const hasQuery = base.includes("?")
@@ -131,9 +133,9 @@ export default function GitPage() {
     if (p) {
       setShareToken(p.share_token || `demo-${p.id}`)
       setViewCount(p.view_count || 0)
-      
+
       const targetRepo = extractProjectRepo(p)
-      
+
       try {
         setLoading(true)
         setError(null)
@@ -437,8 +439,12 @@ export default function GitPage() {
               <div style={{ display: "flex", gap: 16, color: isLight ? "#475569" : "#cbd5e1", fontSize: 11 }}>
                 <span>ผู้ทำการ Commit: <strong>{selectedCommit.author}</strong></span>
                 <span>Commit SHA: <code>{selectedCommit.id.substring(0, 7)}</code></span>
-                <span style={{ color: "#34d399" }}>+24 additions</span>
-                <span style={{ color: "#f87171" }}>-5 deletions</span>
+                {(selectedCommit as any).additions !== undefined && (
+                  <span style={{ color: "#34d399" }}>+{(selectedCommit as any).additions} additions</span>
+                )}
+                {(selectedCommit as any).deletions !== undefined && (
+                  <span style={{ color: "#f87171" }}>-{(selectedCommit as any).deletions} deletions</span>
+                )}
               </div>
             </div>
           )}
