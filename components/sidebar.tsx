@@ -48,9 +48,11 @@ interface ProfileInfo {
   avatar?: string | null;
 }
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter()
+  const { theme } = useTheme();
+  const isLight = theme === "light";
   const [mounted, setMounted] = useState(false);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [notifCount, setNotifCount] = useState(0);
@@ -167,8 +169,8 @@ export default function Sidebar() {
   const canEditName = !!profile?.email;
   const initials = username.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
 
-  return (
-    <aside className="w-56 bg-black text-white flex flex-col h-full print:hidden">
+  const inner = (
+    <>
       <nav className="flex-1 px-3 pt-4 space-y-0.5">
         {navItems.map(({ label, href, icon: Icon }) => {
           const active = pathname === href;
@@ -210,7 +212,6 @@ export default function Sidebar() {
           );
         })}
       </nav>
-
       <div className="px-3 pb-4 space-y-0.5">
         <Link href="/dashboard/settings"
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${pathname === "/dashboard/settings"
@@ -263,7 +264,7 @@ export default function Sidebar() {
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 group/name">
-                  <span suppressHydrationWarning className="text-sm text-white font-medium truncate">{mounted ? username : ""}</span>
+                  <span suppressHydrationWarning className={`text-sm ${isLight ? "text-black" : "text-white"} font-medium truncate`}>{mounted ? username : ""}</span>
                   {canEditName && (
                     <button onClick={startEdit}
                       className="text-gray-600 hover:text-gray-300 opacity-0 group-hover/name:opacity-100 transition-opacity flex-shrink-0">
@@ -277,6 +278,26 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      <aside className="hidden md:flex w-56 bg-black text-white flex-col h-full print:hidden">
+        {inner}
+      </aside>
+
+      <div className="md:hidden">
+        {isOpen && <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />}
+        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-black text-white flex flex-col h-full print:hidden transform transition-transform duration-200 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="p-2 flex justify-end">
+            <button onClick={onClose} aria-label="ปิดเมนู" className="p-2 text-white">
+              <X size={18} />
+            </button>
+          </div>
+          {inner}
+        </aside>
+      </div>
+    </>
   );
 }

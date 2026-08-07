@@ -50,6 +50,9 @@ const MILESTONE_STATUS_CONFIG: Record<string, { label: string; color: string }> 
   overdue: { label: "เลยกำหนด", color: "#f87171" },
 }
 
+// `isMobile` / `isTablet` are determined inside the component to avoid invalid hook calls
+
+
 function clampProgress(value: unknown) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 0
@@ -77,6 +80,7 @@ function resolveMilestoneStatus(milestone: DashboardMilestone): MilestoneStatus 
     endOfDueDate.setHours(23, 59, 59, 999)
     if (endOfDueDate.getTime() < Date.now()) return "overdue"
   }
+
 
   return milestone.status || "upcoming"
 }
@@ -154,6 +158,19 @@ export default function DashboardPage() {
     void loadDashboard()
   }, [loadDashboard])
 
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
   const dashboardData = useMemo(() => {
     const resolvedMilestones = milestones.map((milestone) => ({
       ...milestone,
@@ -206,7 +223,7 @@ export default function DashboardPage() {
 
   const { theme } = useTheme()
   const isLight = theme === "light"
-  const S = useMemo(() => getStyles(isLight), [isLight])
+  const S = useMemo(() => getStyles(isLight, isMobile, isTablet), [isLight, isMobile, isTablet])
 
   return (
     <div style={S.page}>
@@ -464,12 +481,12 @@ function QuickLink({ href, title, description, isLight = false }: { href: string
   )
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
   return {
     page: {
       background: isLight ? "#f8fafc" : "#0d1117",
       minHeight: "100vh",
-      padding: "28px 32px",
+      padding: isMobile ? "16px" : "28px 32px",
       fontFamily: "'DM Sans','Segoe UI',sans-serif",
       color: isLight ? "#0f172a" : "#e5e7eb",
     },
@@ -529,9 +546,8 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     },
     statValue: { fontSize: 26, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", fontFamily: "monospace" },
     statLabel: { fontSize: 12, color: isLight ? "#64748b" : "#6b7280" },
-    firstGrid: { display: "grid", gridTemplateColumns: "250px minmax(0, 1fr)", gap: 14, marginBottom: 14 },
-    secondGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 14, marginBottom: 14 },
-    sectionCard: {
+    firstGrid: { display: "grid", gridTemplateColumns: isTablet ? "1fr" : "250px minmax(0, 1fr)", gap: 14, marginBottom: 14 },
+    secondGrid: { display: "grid", gridTemplateColumns: isTablet ? "1fr" : "minmax(0, 1fr) 340px", gap: 14, marginBottom: 14 }, sectionCard: {
       background: isLight ? "#ffffff" : "#111827",
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
       borderRadius: 14,

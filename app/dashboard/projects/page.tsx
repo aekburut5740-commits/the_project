@@ -23,14 +23,26 @@ const PACKAGES = ["Starter", "Professional", "Enterprise"]
 export default function ProjectsPage() {
   const { theme } = useTheme()
   const isLight = theme === "light"
-  const S = getStyles(isLight)
-
   const [user, setUser] = useState<{ id: number; username: string; role: "admin" | "customer" }>({ id: 0, username: "", role: "customer" })
   const [isAdmin, setIsAdmin] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
+
+  const S = getStyles(isLight, isMobile, isTablet)
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < 640)
+      setIsTablet(window.innerWidth < 1024)
+    }
+    handleResize()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
 
   useEffect(() => {
     const currentUser = getUser() || {
@@ -299,7 +311,7 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false }: { project
                   marginBottom: 2,
                 }}
               >
-                
+
               </div>
 
               <a
@@ -557,9 +569,8 @@ function normalizeWebsiteUrl(value: string): string {
   return `https://${website}`
 }
 
-function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
-  return {
-    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {  return {
+    page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: isMobile ? "16px" : "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
     header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
     title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
     subtitle: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", margin: "4px 0 0" },
@@ -569,8 +580,7 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     searchInput: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: "9px 14px", color: isLight ? "#0f172a" : "#f9fafb", fontSize: 13, outline: "none", width: 220 },
     tabGroup: { display: "flex", gap: 4, background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 8, padding: 4 },
     tabBtn: { border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 },
-    card: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #8b8b8b", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
+    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }, card: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #8b8b8b", borderRadius: 14, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, boxShadow: isLight ? "0 1px 3px rgba(0,0,0,0.05)" : "none" },
     cardName: { fontSize: 16, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
     cardWebsite: { fontSize: 12, color: "#4f8ef7", textDecoration: "none", marginTop: 2, display: "block" },
     cardDesc: { fontSize: 13, color: isLight ? "#64748b" : "#6b7280", lineHeight: 1.6, margin: 0 },
@@ -585,8 +595,8 @@ function getStyles(isLight: boolean): Record<string, React.CSSProperties> {
     addManagerBtn: { background: isLight ? "#f1f5f9" : "#1f2937", border: isLight ? "1px solid #cbd5e1" : "1px solid #374151", borderRadius: 8, color: "#4f8ef7", fontSize: 12, fontWeight: 600, padding: "8px 12px", cursor: "pointer", alignSelf: "flex-start" },
     removeBtn: { background: "transparent", border: isLight ? "1px solid #fca5a5" : "1px solid #374151", borderRadius: 8, color: "#f87171", fontSize: 12, fontWeight: 600, padding: "8px 10px", cursor: "pointer" },
     empty: { color: isLight ? "#94a3b8" : "#374151", fontSize: 14, textAlign: "center", padding: "60px 0", fontStyle: "italic" },
-    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24 },
-    modal: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
+    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", justifyContent: "center", zIndex: 50, padding: isMobile ? 0 : 24, alignItems: isMobile ? "flex-end" : "center" },
+    modal: { background: isLight ? "#ffffff" : "#111827", border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937", borderRadius: 16, width: "100%", maxWidth: isMobile ? "100%" : 500, margin: isMobile ? "0" : "auto", maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" },
     modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937" },
     modalTitle: { fontSize: 17, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb" },
     modalSub: { fontSize: 12, color: isLight ? "#64748b" : "#6b7280", marginTop: 2 },
