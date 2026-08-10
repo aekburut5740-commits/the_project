@@ -608,6 +608,63 @@ export async function deleteMilestone(id: number) {
   return result.rows[0]
 }
 
+// ===== MILESTONE TASKS =====
+
+async function ensureMilestoneTasksTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS milestone_tasks (
+      id SERIAL PRIMARY KEY,
+      milestone_id INTEGER REFERENCES milestones(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      is_done BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `)
+}
+
+// ดู task ทั้งหมดของ milestone
+export async function getMilestoneTasks(milestone_id: number) {
+  await ensureMilestoneTasksTable()
+  const result = await db.query(
+    `SELECT * FROM milestone_tasks WHERE milestone_id = $1 ORDER BY created_at ASC`,
+    [milestone_id]
+  )
+  return result.rows
+}
+
+// Admin: สร้าง task ใหม่
+export async function createMilestoneTask(milestone_id: number, title: string) {
+  await ensureMilestoneTasksTable()
+  const result = await db.query(
+    `INSERT INTO milestone_tasks (milestone_id, title) VALUES ($1, $2) RETURNING *`,
+    [milestone_id, title]
+  )
+  return result.rows[0]
+}
+
+// อัปเดต task (เปลี่ยนชื่อ หรือ ติ๊กว่าเสร็จแล้ว)
+export async function updateMilestoneTask(id: number, title?: string, is_done?: boolean) {
+  const result = await db.query(
+    `UPDATE milestone_tasks SET
+       title = COALESCE($1, title),
+       is_done = COALESCE($2, is_done)
+     WHERE id = $3 RETURNING *`,
+    [title, is_done, id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบ task")
+  return result.rows[0]
+}
+
+// Admin: ลบ task
+export async function deleteMilestoneTask(id: number) {
+  const result = await db.query(
+    `DELETE FROM milestone_tasks WHERE id = $1 RETURNING *`,
+    [id]
+  )
+  if (!result.rows.length) throw new Error("ไม่พบ task")
+  return result.rows[0]
+}
+
 // ===== FEEDBACK CENTER =====
 
 // Customer: สร้าง Ticket

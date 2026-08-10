@@ -1,4 +1,4 @@
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead } from "../database/route"
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead, getMilestoneTasks, createMilestoneTask, updateMilestoneTask, deleteMilestoneTask } from "../database/route";
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -578,6 +578,55 @@ new Elysia()
     }
     try {
       return await deleteMilestone(Number(params.id))
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
+
+  // ดู task ทั้งหมดของ milestone
+  .get("/api/milestones/:id/tasks", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getMilestoneTasks(Number(params.id))
+  })
+  // Admin: สร้าง task ใหม่
+  .post("/api/milestones/:id/tasks", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    const { title } = body as any
+    if (!title) {
+      set.status = 400
+      return { message: "กรุณาใส่ชื่อ task" }
+    }
+    return createMilestoneTask(Number(params.id), title)
+  })
+  // อัปเดต task (เปลี่ยนชื่อ หรือติ๊กว่าเสร็จแล้ว)
+  .patch("/api/milestone-tasks/:id", async ({ headers, set, params, body }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    const { title, is_done } = body as any
+    try {
+      return await updateMilestoneTask(Number(params.id), title, is_done)
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message }
+    }
+  })
+  // Admin: ลบ task
+  .delete("/api/milestone-tasks/:id", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    try {
+      return await deleteMilestoneTask(Number(params.id))
     } catch (err: any) {
       set.status = 404
       return { message: err.message }
