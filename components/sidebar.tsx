@@ -264,7 +264,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 group/name">
-                  <span suppressHydrationWarning className={`text-sm ${isLight ? "text-black" : "text-white"} font-medium truncate`}>{mounted ? username : ""}</span>
+                  <span suppressHydrationWarning className={`text-sm font-medium truncate ${isLight ? "text-slate-900" : "text-slate-50"}`}>{mounted ? username : ""}</span>
                   {canEditName && (
                     <button onClick={startEdit}
                       className="text-gray-600 hover:text-gray-300 opacity-0 group-hover/name:opacity-100 transition-opacity flex-shrink-0">
@@ -273,7 +273,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
                   )}
                 </div>
               )}
-              <span suppressHydrationWarning className="text-xs text-gray-500">{mounted ? role : ""}</span>
+              <span suppressHydrationWarning className={`text-xs ${isLight ? "text-slate-500" : "text-slate-400"}`}>{mounted ? role : ""}</span>
             </div>
           </div>
         </div>
