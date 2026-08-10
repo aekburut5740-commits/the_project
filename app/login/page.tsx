@@ -172,7 +172,7 @@ export default function LoginPage() {
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
                 />
-                <span>Remember me</span>
+                <span className="text-sm text-gray-700">Remember me</span>
               </label>
             </div>
 
