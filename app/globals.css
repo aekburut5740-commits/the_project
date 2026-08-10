@@ -5,6 +5,11 @@
   --foreground: #171717;
 }
 
+.dark {
+  --background: #0d1117;
+  --foreground: #f9fafb;
+}
+
 /* System Theme Classes Override */
 .theme-light {
   background-color: #f8fafc !important;

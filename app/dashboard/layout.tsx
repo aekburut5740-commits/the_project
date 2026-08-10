@@ -1,12 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { API_URL } from "@/lib/api"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import Sidebar from "@/components/sidebar"
 import { NotificationProvider } from "@/lib/notificationStore"
 import { ThemeProvider } from "@/lib/themeContext"
+import { getUser } from "@/lib/auth"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter()
+
+  useEffect(() => {
+    const user = getUser()
+  console.log("user:", user)
+  if (!user) return
+  if (user.role === "admin") return
+
+  fetch(`${API_URL}/api/maintenance`)
+    .then((r) => r.json())
+    .then((data) => {
+      console.log("maintenance data:", data)
+      if (data.is_active) {
+        router.replace("/maintenance")
+      }
+    })
+    .catch((err) => console.log("maintenance error:", err))
+  }, [router])
 
   return (
     <ThemeProvider>
