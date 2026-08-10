@@ -148,7 +148,9 @@ function DocumentsContent() {
     load()
   }, [isAdmin, requestedProject])
 
-  const filtered = docs.filter((d) => {
+  const visibleDocs = docs.filter((d) => isAdmin || !d.isConfidential)
+
+  const filtered = visibleDocs.filter((d) => {
     const matchSearch = d.name.toLowerCase().includes(search.toLowerCase())
     const matchProject = filterProject === "all" || d.projectId === filterProject
     const matchCategory = filterCategory === "all" || d.category === filterCategory
@@ -187,7 +189,7 @@ function DocumentsContent() {
       <div style={S.header}>
         <div>
           <h1 style={S.title}>Document Vault</h1>
-          <p style={S.subtitle}>{docs.length} เอกสาร{isAdmin ? "ทั้งหมด" : "ของโปรเจคคุณ"}</p>
+          <p style={S.subtitle}>{visibleDocs.length} เอกสาร{isAdmin ? "ทั้งหมด" : "ของโปรเจคคุณ"}</p>
         </div>
         {isAdmin && (
           <button onClick={() => setShowUpload(true)} style={S.addBtn}>
@@ -210,7 +212,7 @@ function DocumentsContent() {
 
       <div style={S.statsRow}>
         {(Object.keys(CATEGORY_CONFIG) as DocCategory[]).map((cat) => {
-          const count = docs.filter((d) => d.category === cat).length
+          const count = visibleDocs.filter((d) => d.category === cat).length
           return (
             <button key={cat} onClick={() => setFilterCategory(filterCategory === cat ? "all" : cat)}
               style={{ ...S.statCard, borderTopColor: CATEGORY_CONFIG[cat].color, opacity: filterCategory !== "all" && filterCategory !== cat ? 0.4 : 1, cursor: "pointer" }}>

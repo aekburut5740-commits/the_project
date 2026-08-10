@@ -461,12 +461,18 @@ new Elysia()
   .get("/api/projects/:id/files", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
+    if (result.role !== "admin") {
+      await getProjectHealth(Number(params.id), result.id, result.role)
+    }
     return getFiles(Number(params.id))
   })
   // อัปโหลดไฟล์
   .post("/api/projects/:id/files", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
+    if (result.role !== "admin") {
+      await getProjectHealth(Number(params.id), result.id, result.role)
+    }
     const { file, category, is_confidential } = body as any
     if (!file) {
       set.status = 400
