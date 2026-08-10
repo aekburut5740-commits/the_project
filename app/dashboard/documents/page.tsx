@@ -108,17 +108,15 @@ function DocumentsContent() {
       setError("")
 
       if (!mounted) {
-        return (
-          <div style={{ padding: 32 }}>
-            กำลังโหลด...
-          </div>
-        )
+        setLoading(false)
+        return
       }
 
       try {
         const data = await backend.projects(isAdmin)
         const nextProjects = data.map((project: any) => normalizeProject(project) as Project)
         setProjects(nextProjects)
+        console.log("projects:", nextProjects)
 
         const requestedProjectId = Number(requestedProject)
         if (Number.isInteger(requestedProjectId) && nextProjects.some((project) => project.id === requestedProjectId)) {
@@ -128,8 +126,11 @@ function DocumentsContent() {
         const groups = await Promise.all(
           nextProjects.map(async (project) => {
             try {
-              return await backend.files(project.id)
-            } catch {
+              const files = await backend.files(project.id)
+              console.log(`files of project ${project.id}:`, files)
+              return files
+            } catch (err) {
+              console.log(`error files project ${project.id}:`, err)
               return []
             }
           })
@@ -146,7 +147,7 @@ function DocumentsContent() {
     }
 
     load()
-  }, [isAdmin, requestedProject])
+  }, [isAdmin, requestedProject, mounted])
 
   const visibleDocs = docs.filter((d) => isAdmin || !d.isConfidential)
 
