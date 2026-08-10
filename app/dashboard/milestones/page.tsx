@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import {
@@ -469,6 +470,13 @@ function MilestoneCard({
             >
               <StatusIcon size={11} /> {label}
             </span>
+
+            <Link
+              href={`/dashboard/milestones/${milestone.id}`}
+              style={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 7, color: "#9ca3af", fontSize: 12, fontWeight: 600, padding: "5px 12px", textDecoration: "none" }}
+            >
+              ดูรายละเอียด
+            </Link>
 
             {isAdmin && (
               <button type="button" onClick={onEdit} style={S.editBtn}>
