@@ -660,12 +660,11 @@ new Elysia()
     return getAdminReport()
   })
  
-  // ดูสถานะ Maintenance Mode (ทุกคนดูได้)
-  .get("/api/maintenance", async ({ headers, set }) => {
-    const result = authCheck({ headers, set })
-    if (set.status === 401) return result
+ 
+  // ดูสถานะ Maintenance Mode (ทุกคนดูได้ ไม่ต้อง login)
+.get("/api/maintenance", async () => {
     return getMaintenanceStatus()
-  })
+})
   // Admin: เปิด/ปิด Maintenance Mode
   .patch("/api/admin/maintenance", async ({ headers, set, body }) => {
     const result = authCheck({ headers, set })
