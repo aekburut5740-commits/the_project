@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import Link from "next/link"
 import { STATUS_CONFIG } from "@/lib/project-config"
 
@@ -308,18 +308,18 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false, isMobile = 
   const detailHref = `/dashboard/projects/${p.id}`
 
   const cardStyle = { ...S.card, padding: isMobile ? "16px" : "15px 15px 5px 15px", overflow: "hidden" }
-  const topRowStyle = {
+  const topRowStyle: CSSProperties = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: isMobile ? "stretch" : "flex-start",
     flexDirection: isMobile ? "column" : "row",
     gap: 12,
   }
-  const metaRowStyle = {
+  const metaRowStyle: CSSProperties = {
     ...S.metaRow,
     flexDirection: isMobile ? "column" : "row",
   }
-  const actionsRowStyle = {
+  const actionsRowStyle: CSSProperties = {
     borderTop: isAdmin ? "1px solid #1f2937" : "none",
     padding: isMobile ? "14px 16px 18px" : "12px 22px 20px",
     display: "flex",
@@ -390,23 +390,6 @@ function ProjectCard({ project: p, isAdmin, onEdit, isLight = false, isMobile = 
           <span style={S.metaLabel}>แพ็กเกจ</span>
           <span style={{ ...S.metaValue, color: "#a78bfa" }}>{p.package}</span>
         </div>
-      </div>
-      <div style={actionsRowStyle}>
-        {isAdmin && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit()
-            }}
-            style={{
-              ...S.editBtn,
-              width: isMobile ? "100%" : "auto",
-              textAlign: "center",
-            }}
-          >
-            แก้ไข
-          </button>
-        )}
       </div>
       <Link
         href={detailHref}
