@@ -1,6 +1,6 @@
 "use client"
 
-import { color } from "bun"
+
 import { useEffect, useState } from "react"
 
 export default function MaintenancePage() {
@@ -24,7 +24,7 @@ export default function MaintenancePage() {
                 borderTop: `1px solid #1f2937`,
                 borderRight: `1px solid #1f2937`,
                 borderBottom: `1px solid #1f2937`,
-                borderLeft: `3px solid ${color}`,
+                borderLeft: "3px solid #f59e0b",
                 maxWidth: 480, width: "100%", textAlign: "center",
                 display: "flex", flexDirection: "column", gap: 16,
             }}>
