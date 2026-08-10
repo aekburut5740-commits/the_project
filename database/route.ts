@@ -652,7 +652,18 @@ export async function updateMilestoneTask(id: number, title?: string, is_done?: 
     [title, is_done, id]
   )
   if (!result.rows.length) throw new Error("ไม่พบ task")
-  return result.rows[0]
+  const updatedTask = result.rows[0]
+
+  // คำนวณ progress ของ milestone ใหม่ จาก tasks ทั้งหมดที่มีอยู่จริง
+  await db.query(
+    `UPDATE milestones SET progress = (
+       SELECT ROUND(COUNT(*) FILTER (WHERE is_done = true) * 100.0 / NULLIF(COUNT(*), 0))
+       FROM milestone_tasks WHERE milestone_id = $1
+     ) WHERE id = $1`,
+    [updatedTask.milestone_id]
+  )
+
+  return updatedTask
 }
 
 // Admin: ลบ task
