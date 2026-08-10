@@ -92,6 +92,13 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
     if (!mounted) return;
 
     const loadUnread = () => {
+      const notifEnabled = window.localStorage.getItem("nexus_notifications_enabled")
+      if (notifEnabled === "false") {
+        setNotifCount(0)
+        setFeedbackUnread(0)
+        return
+      }
+
       backend.unreadCount()
         .then((data: any) => {
           setNotifCount(data.notifications || 0)
