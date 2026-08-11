@@ -59,7 +59,7 @@ export default function MilestoneDetailPage() {
         loadData()
     }, [mounted, id])
 
-        async function loadData() {
+    async function loadData() {
         setLoading(true)
         setError("")
 
