@@ -1,4 +1,4 @@
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead, getMilestoneTasks, createMilestoneTask, updateMilestoneTask, deleteMilestoneTask } from "../database/route";
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead, getMilestoneTasks, createMilestoneTask, updateMilestoneTask, deleteMilestoneTask, createMilestoneLog, getMilestoneLogs, getMilestoneProgressHistory } from "../database/route";
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -462,22 +462,29 @@ new Elysia()
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     if (result.role !== "admin") {
-      await getProjectHealth(Number(params.id), result.id, result.role)
+      try {
+        await getProjectHealth(Number(params.id), result.id, result.role)
+      } catch (err: any) {
+        set.status = 403
+        return { message: "ไม่มีสิทธิ์เข้าถึงโปรเจคนี้" }
+      }
     }
     return getFiles(Number(params.id))
   })
-  // อัปโหลดไฟล์
+
+ // อัปโหลดไฟล์
   .post("/api/projects/:id/files", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     if (result.role !== "admin") {
-      await getProjectHealth(Number(params.id), result.id, result.role)
+      try {
+        await getProjectHealth(Number(params.id), result.id, result.role)
+      } catch (err: any) {
+        set.status = 403
+        return { message: "ไม่มีสิทธิ์เข้าถึงโปรเจคนี้" }
+      }
     }
     const { file, category, is_confidential } = body as any
-    if (!file) {
-      set.status = 400
-      return { message: "กรุณาเลือกไฟล์" }
-    }
 
     const filename = file.name
     const filesize = file.size
@@ -603,7 +610,9 @@ new Elysia()
       set.status = 400
       return { message: "กรุณาใส่ชื่อ task" }
     }
-    return createMilestoneTask(Number(params.id), title)
+    const task = await createMilestoneTask(Number(params.id), title)
+    await createMilestoneLog(result.id, Number(params.id), `${result.username} เพิ่ม task ใหม่ "${title}"`)
+    return task
   })
   // อัปเดต task (เปลี่ยนชื่อ หรือติ๊กว่าเสร็จแล้ว)
   .patch("/api/milestone-tasks/:id", async ({ headers, set, params, body }) => {
@@ -611,7 +620,18 @@ new Elysia()
     if (set.status === 401) return result
     const { title, is_done } = body as any
     try {
-      return await updateMilestoneTask(Number(params.id), title, is_done)
+      const updated = await updateMilestoneTask(Number(params.id), title, is_done)
+      if (is_done !== undefined) {
+        await createMilestoneLog(
+          result.id,
+          updated.milestone_id,
+          `${result.username} อัปเดตสถานะของ task "${updated.title}" เป็น ${is_done ? "เสร็จแล้ว" : "ยังไม่เสร็จ"}`
+        )
+      }
+      if (title !== undefined) {
+        await createMilestoneLog(result.id, updated.milestone_id, `${result.username} แก้ไขชื่อ task เป็น "${title}"`)
+      }
+      return updated
     } catch (err: any) {
       set.status = 404
       return { message: err.message }
@@ -631,6 +651,20 @@ new Elysia()
       set.status = 404
       return { message: err.message }
     }
+  })
+
+  // ดู Activity Log ของ milestone
+  .get("/api/milestones/:id/logs", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getMilestoneLogs(Number(params.id))
+  })
+
+  // ดูประวัติความคืบหน้าของ milestone (สำหรับกราฟ)
+  .get("/api/milestones/:id/progress-history", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getMilestoneProgressHistory(Number(params.id))
   })
   // Customer: สร้าง Ticket
   .post("/api/projects/:id/feedbacks", async ({ headers, set, params, body }) => {

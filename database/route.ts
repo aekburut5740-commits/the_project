@@ -655,12 +655,26 @@ export async function updateMilestoneTask(id: number, title?: string, is_done?: 
   const updatedTask = result.rows[0]
 
   // คำนวณ progress ของ milestone ใหม่ จาก tasks ทั้งหมดที่มีอยู่จริง
-  await db.query(
+  const progressResult = await db.query(
     `UPDATE milestones SET progress = (
        SELECT ROUND(COUNT(*) FILTER (WHERE is_done = true) * 100.0 / NULLIF(COUNT(*), 0))
        FROM milestone_tasks WHERE milestone_id = $1
-     ) WHERE id = $1`,
+     ) WHERE id = $1 RETURNING progress`,
     [updatedTask.milestone_id]
+  )
+
+  // บันทึกประวัติความคืบหน้า ณ เวลานี้ไว้สำหรับกราฟ
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS milestone_progress_history (
+      id SERIAL PRIMARY KEY,
+      milestone_id INTEGER REFERENCES milestones(id) ON DELETE CASCADE,
+      progress INTEGER NOT NULL,
+      recorded_at TIMESTAMP DEFAULT NOW()
+    );`
+  )
+  await db.query(
+    `INSERT INTO milestone_progress_history (milestone_id, progress) VALUES ($1, $2)`,
+    [updatedTask.milestone_id, progressResult.rows[0]?.progress ?? 0]
   )
 
   return updatedTask
@@ -674,6 +688,45 @@ export async function deleteMilestoneTask(id: number) {
   )
   if (!result.rows.length) throw new Error("ไม่พบ task")
   return result.rows[0]
+}
+
+// ===== MILESTONE ACTIVITY LOG =====
+
+async function ensureMilestoneLogColumn() {
+  await db.query(`ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS milestone_id INTEGER REFERENCES milestones(id) ON DELETE CASCADE;`)
+  // กันไว้เผื่อคอลัมน์ project_id เดิมบังคับห้ามว่าง (log ของ milestone ไม่มี project_id ตรงๆ)
+  await db.query(`ALTER TABLE activity_logs ALTER COLUMN project_id DROP NOT NULL;`)
+}
+
+export async function createMilestoneLog(user_id: number, milestone_id: number, action: string) {
+  await ensureMilestoneLogColumn()
+  await db.query(
+    `INSERT INTO activity_logs (user_id, milestone_id, action) VALUES ($1, $2, $3)`,
+    [user_id, milestone_id, action]
+  )
+}
+
+// ดู log ทั้งหมดของ milestone
+export async function getMilestoneLogs(milestone_id: number) {
+  await ensureMilestoneLogColumn()
+  const result = await db.query(
+    `SELECT activity_logs.*, users.username
+     FROM activity_logs
+     LEFT JOIN users ON activity_logs.user_id = users.id
+     WHERE activity_logs.milestone_id = $1
+     ORDER BY activity_logs.created_at DESC`,
+    [milestone_id]
+  )
+  return result.rows
+}
+// ดูประวัติความคืบหน้าของ milestone (สำหรับกราฟ)
+export async function getMilestoneProgressHistory(milestone_id: number) {
+  const result = await db.query(
+    `SELECT id, progress, recorded_at FROM milestone_progress_history
+     WHERE milestone_id = $1 ORDER BY recorded_at ASC`,
+    [milestone_id]
+  )
+  return result.rows
 }
 
 // ===== FEEDBACK CENTER =====
