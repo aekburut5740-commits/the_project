@@ -569,7 +569,9 @@ new Elysia()
     }
     const { title, description, status, progress, start_date, end_date, phase } = body as any
     try {
-      return await updateMilestone(Number(params.id), title, description, status, progress, start_date, end_date, phase)
+      const updated = await updateMilestone(Number(params.id), title, description, status, progress, start_date, end_date, phase)
+      await createMilestoneLog(result.id, updated.id, `${result.username} แก้ไข Milestone "${updated.title}"`)
+      return updated
     } catch (err: any) {
       set.status = 404
       return { message: err.message }
@@ -646,7 +648,9 @@ new Elysia()
       return { message: "ไม่มีสิทธิ์เข้าถึง" }
     }
     try {
-      return await deleteMilestoneTask(Number(params.id))
+      const deleted = await deleteMilestoneTask(Number(params.id))
+      await createMilestoneLog(result.id, deleted.milestone_id, `${result.username} ลบ task "${deleted.title}"`)
+      return deleted
     } catch (err: any) {
       set.status = 404
       return { message: err.message }
@@ -655,6 +659,12 @@ new Elysia()
 
   // ดู Activity Log ของ milestone
   .get("/api/milestones/:id/logs", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    return getMilestoneLogs(Number(params.id))
+  })
+  // ดู Activity Log ของ milestone (ชื่อสำรอง ให้ผลลัพธ์เหมือนกัน)
+  .get("/api/milestones/:id/activity", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     return getMilestoneLogs(Number(params.id))
