@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
@@ -79,8 +80,6 @@ function getDisplayStatus(status: unknown, dueDate: string): MilestoneStatus {
 
   return "upcoming"
 }
-
-import { Suspense } from "react"
 
 function MilestonesContent() {
   const { theme } = useTheme()
