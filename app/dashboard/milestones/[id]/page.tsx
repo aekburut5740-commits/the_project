@@ -21,6 +21,21 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
     overdue: { label: "เลยกำหนด", color: "#f87171" },
 }
 
+type ActivityLog = {
+    id: number
+    user_id: number
+    username: string | null
+    milestone_id: number
+    action: string
+    created_at: string
+}
+
+type ProgressHistoryPoint = {
+    id: number
+    progress: number
+    recorded_at: string
+}
+
 export default function MilestoneDetailPage() {
     const { id } = useParams()
     const router = useRouter()
@@ -30,6 +45,8 @@ export default function MilestoneDetailPage() {
 
     const [milestone, setMilestone] = useState<any>(null)
     const [tasks, setTasks] = useState<Task[]>([])
+    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
+    const [progressHistory, setProgressHistory] = useState<ProgressHistoryPoint[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState("")
     const [newTask, setNewTask] = useState("")
@@ -42,25 +59,51 @@ export default function MilestoneDetailPage() {
         loadData()
     }, [mounted, id])
 
-    async function loadData() {
+        async function loadData() {
         setLoading(true)
+        setError("")
+
         try {
-            // ดึง milestone จาก project ที่มีอยู่
-            // หา milestone โดยดึงจาก tasks ก่อน
-            const taskData = await backend.milestoneTasks(Number(id))
+            const milestoneId = Number(id)
+
+            // ข้อมูลหลัก: ถ้าส่วนนี้ไม่ได้จริง จึงค่อยให้หน้าแจ้ง error
+            const [taskData, projects] = await Promise.all([
+                backend.milestoneTasks(milestoneId),
+                backend.projects(isAdmin),
+            ])
+
             setTasks(taskData)
 
-            // ดึง milestones ของทุก project แล้วหา id ที่ตรง
-            const projects = await backend.projects(isAdmin)
-            for (const proj of projects as any[]) {
-                const rows = await backend.milestones((proj as any).id)
-                const found = rows.find((m: any) => Number(m.id) === Number(id))
+            for (const project of projects as any[]) {
+                const milestones = await backend.milestones(Number(project.id))
+                const found = milestones.find(
+                    (item: any) => Number(item.id) === milestoneId
+                )
+
                 if (found) {
                     setMilestone(normalizeMilestone(found))
                     break
                 }
             }
-        } catch (err) {
+
+            // ส่วนเสริม: endpoint ใดมีปัญหา หน้า milestone ยังต้องใช้งานได้
+            const [activityResult, historyResult] = await Promise.allSettled([
+                backend.milestoneActivity(milestoneId),
+                backend.milestoneProgressHistory(milestoneId),
+            ])
+
+            if (activityResult.status === "fulfilled") {
+                setActivityLogs(activityResult.value)
+            } else {
+                console.warn("โหลด Activity Log ไม่สำเร็จ", activityResult.reason)
+            }
+
+            if (historyResult.status === "fulfilled") {
+                setProgressHistory(historyResult.value)
+            } else {
+                console.warn("โหลด Progress History ไม่สำเร็จ", historyResult.reason)
+            }
+        } catch {
             setError("ไม่สามารถโหลดข้อมูลได้")
         } finally {
             setLoading(false)

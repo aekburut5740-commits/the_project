@@ -9,6 +9,13 @@ import type {
 
 
 export const backend = {
+
+  milestoneActivity: (milestoneId: number) =>
+    apiFetch<any[]>(`/api/milestones/${milestoneId}/logs`),
+
+  milestoneProgressHistory: (milestoneId: number) =>
+    apiFetch<any[]>(`/api/milestones/${milestoneId}/progress-history`),
+
   profile: () => apiFetch<{ user: JwtUser }>("/api/profile"),
   projects: (admin = false) =>
     apiFetch<unknown[]>(
