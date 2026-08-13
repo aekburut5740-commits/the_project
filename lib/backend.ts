@@ -10,12 +10,6 @@ import type {
 
 export const backend = {
 
-  milestoneActivity: (milestoneId: number) =>
-    apiFetch<any[]>(`/api/milestones/${milestoneId}/logs`),
-
-  milestoneProgressHistory: (milestoneId: number) =>
-    apiFetch<any[]>(`/api/milestones/${milestoneId}/progress-history`),
-
   profile: () => apiFetch<{ user: JwtUser }>("/api/profile"),
   projects: (admin = false) =>
     apiFetch<unknown[]>(
@@ -139,6 +133,8 @@ export const backend = {
       body: JSON.stringify(body)
     }),
   milestoneTasks: (milestoneId: number) => apiFetch<any[]>(`/api/milestones/${milestoneId}/tasks`),
+  milestoneActivity: (milestoneId: number) => apiFetch<any[]>(`/api/milestones/${milestoneId}/logs`),
+  milestoneProgressHistory: (milestoneId: number) => apiFetch<any[]>(`/api/milestones/${milestoneId}/progress-history`),
   createMilestoneTask: (milestoneId: number, title: string) => apiFetch(`/api/milestones/${milestoneId}/tasks`, { method: "POST", body: JSON.stringify({ title }) }),
   updateMilestoneTask: (taskId: number, body: { title?: string; is_done?: boolean }) => apiFetch(`/api/milestone-tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteMilestoneTask: (taskId: number) => apiFetch(`/api/milestone-tasks/${taskId}`, { method: "DELETE" }),

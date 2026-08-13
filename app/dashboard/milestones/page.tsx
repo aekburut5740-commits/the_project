@@ -317,24 +317,37 @@ function MilestonesContent() {
         ))}
       </div>
 
-      <div style={S.controls}>
-        <select
-          value={selectedProjectId}
-          onChange={(event) =>
-            setSelectedProjectId(
-              event.target.value === "all" ? "all" : Number(event.target.value)
-            )
-          }
-          style={S.projectSelect}
+      <div style={S.projectTabsRow}>
+        <button
+          type="button"
+          onClick={() => setSelectedProjectId("all")}
+          style={{
+            ...S.projectTab,
+            background: selectedProjectId === "all" ? "#4f8ef7" : (isLight ? "#ffffff" : "#111827"),
+            color: selectedProjectId === "all" ? "#fff" : (isLight ? "#334155" : "#9ca3af"),
+            borderColor: selectedProjectId === "all" ? "#4f8ef7" : (isLight ? "#cbd5e1" : "#1f2937"),
+          }}
         >
-          <option value="all">ทุกโปรเจค</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
+          ทุกโปรเจค
+        </button>
+        {projects.map((project) => (
+          <button
+            key={project.id}
+            type="button"
+            onClick={() => setSelectedProjectId(project.id)}
+            style={{
+              ...S.projectTab,
+              background: selectedProjectId === project.id ? "#4f8ef7" : (isLight ? "#ffffff" : "#111827"),
+              color: selectedProjectId === project.id ? "#fff" : (isLight ? "#334155" : "#9ca3af"),
+              borderColor: selectedProjectId === project.id ? "#4f8ef7" : (isLight ? "#cbd5e1" : "#1f2937"),
+            }}
+          >
+            {project.name}
+          </button>
+        ))}
+      </div>
 
+      <div style={S.controls}>
         <div style={S.tabGroup}>
           {(["all", "upcoming", "in_progress", "completed", "overdue"] as const).map(
             (status) => (
@@ -900,15 +913,23 @@ function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record
       flexWrap: "wrap",
       justifyContent: isMobile ? "stretch" : "flex-start",
     },
-    projectSelect: {
-      background: isLight ? "#ffffff" : "#111827",
-      border: isLight ? "1px solid #cbd5e1" : "1px solid #1f2937",
-      borderRadius: 8,
-      color: isLight ? "#0f172a" : "#d1d5db",
-      fontSize: 12,
-      padding: "9px 12px",
-      outline: "none",
-      minWidth: isMobile ? "100%" : undefined,
+    projectTabsRow: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 14,
+      overflowX: "auto",
+      paddingBottom: 4,
+    },
+    projectTab: {
+      flexShrink: 0,
+      border: "1px solid",
+      borderRadius: 999,
+      padding: "8px 16px",
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer",
+      whiteSpace: "nowrap",
+      transition: "all 0.15s",
     },
     tabGroup: {
       display: "flex",
