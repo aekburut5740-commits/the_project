@@ -52,19 +52,18 @@ export async function register(
 
 // เข้าสู่ระบบ (ใช้ได้ทั้ง username และ email)
 export async function login(
-  username: string,
-  email: string,
+  identifier: string,
   password: string
 ) {
-  if (!username || !email || !password) {
+  if (!identifier || !password) {
     throw new Error("Username, Email หรือ Password ไม่ถูกต้อง")
   }
 
   const result = await db.query(
     `SELECT id, username, email, password, role
      FROM users
-     WHERE username = $1 AND email = $2`,
-    [username, email]
+     WHERE username = $1 OR email = $1`,
+    [identifier]
   )
 
   if (!result.rows.length) {
@@ -142,6 +141,14 @@ export async function getAllProjects() {
 }
 
 // Admin: อัปเดตสถานะโปรเจค
+export async function getProjectById(id: number) {
+  const result = await db.query(
+    `SELECT * FROM projects WHERE id = $1 LIMIT 1`,
+    [id]
+  )
+  return result.rows[0]
+}
+
 export async function updateProjectStatus(id: number, status: string) {
   const result = await db.query(
     "UPDATE projects SET status = $1 WHERE id = $2 RETURNING *",
@@ -753,12 +760,26 @@ export async function createFeedback(project_id: number, user_id: number, title:
   return result.rows[0]
 }
 
+// Guest ส่ง feedback จากหน้า Share Link โดยไม่ต้องเข้าสู่ระบบ
+export async function createGuestFeedback(project_id: number, guest_name: string, guest_email: string, title: string, message: string, priority: string) {
+  await db.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255);`)
+  await db.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255);`)
+  const result = await db.query(
+    `INSERT INTO feedbacks (project_id, user_id, guest_name, guest_email, title, message, priority) 
+     VALUES ($1, NULL, $2, $3, $4, $5, $6) RETURNING *`,
+    [project_id, guest_name || null, guest_email || null, title, message, priority]
+  )
+  return result.rows[0]
+}
+
 // ดู Ticket ทั้งหมดของโปรเจค
 export async function getFeedbacks(project_id: number) {
+  await db.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255);`)
+  await db.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255);`)
   const result = await db.query(
-    `SELECT feedbacks.*, users.username 
+    `SELECT feedbacks.*, COALESCE(users.username, feedbacks.guest_name, 'Guest') as username 
      FROM feedbacks 
-     JOIN users ON feedbacks.user_id = users.id
+     LEFT JOIN users ON feedbacks.user_id = users.id
      WHERE feedbacks.project_id = $1 
      ORDER BY feedbacks.created_at DESC`,
     [project_id]
@@ -768,10 +789,12 @@ export async function getFeedbacks(project_id: number) {
 
 // Admin: ดู Ticket ทั้งหมดในระบบ
 export async function getAllFeedbacks() {
+  await db.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255);`)
+  await db.query(`ALTER TABLE feedbacks ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255);`)
   const result = await db.query(
-    `SELECT feedbacks.*, users.username, projects.name as project_name
+    `SELECT feedbacks.*, COALESCE(users.username, feedbacks.guest_name, 'Guest') as username, projects.name as project_name
      FROM feedbacks 
-     JOIN users ON feedbacks.user_id = users.id
+     LEFT JOIN users ON feedbacks.user_id = users.id
      JOIN projects ON feedbacks.project_id = projects.id
      ORDER BY feedbacks.created_at DESC`
   )
@@ -1090,6 +1113,28 @@ export async function generateShareToken(projectId: number) {
     `UPDATE projects SET share_token = $1 WHERE id = $2 RETURNING *`,
     [token, projectId]
   )
+  return result.rows[0]
+}
+
+// หาโปรเจคจากชื่อ (slug) สำหรับหน้า preview path แบบ /{project}/{commit}
+export async function getProjectByName(projectName: string) {
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS share_token VARCHAR(255);`)
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS view_count INT DEFAULT 0;`)
+  await db.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP;`)
+
+  const result = await db.query(
+    `UPDATE projects 
+     SET view_count = COALESCE(view_count, 0) + 1,
+         last_viewed_at = CURRENT_TIMESTAMP
+     WHERE LOWER(name) = LOWER($1)
+     RETURNING *`,
+    [projectName]
+  )
+  if (!result.rows.length) {
+    const fallback = await db.query(`SELECT * FROM projects WHERE id = $1 LIMIT 1`, [isNaN(Number(projectName)) ? 0 : Number(projectName)])
+    if (fallback.rows.length) return fallback.rows[0]
+    throw new Error("ไม่พบโปรเจคที่ต้องการดูพรีวิว หรือชื่อโปรเจคไม่ถูกต้อง")
+  }
   return result.rows[0]
 }
 

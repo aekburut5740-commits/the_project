@@ -1,9 +1,11 @@
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead, getMilestoneTasks, createMilestoneTask, updateMilestoneTask, deleteMilestoneTask, createMilestoneLog, getMilestoneLogs, getMilestoneProgressHistory } from "../database/route";
+import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, createGuestFeedback, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, getProjectByName, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead, getMilestoneTasks, createMilestoneTask, updateMilestoneTask, deleteMilestoneTask, createMilestoneLog, getMilestoneLogs, getMilestoneProgressHistory, getProjectById } from "../database/route";
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
 import type { JwtPayload } from "jsonwebtoken"
 import path from "path"
+import { deployProject, getDeployStatus, ensureDirs, slugify } from "./deploy"
+const { WORK_ROOT } = ensureDirs()
 const UPLOADS_DIR = path.join(__dirname, "../uploads")
 if (!process.env.JWT_SECRET) {
   throw new Error("ไม่พบ JWT_SECRET ใน environment variable กรุณาตั้งค่าใน .env ก่อนรันเซิร์ฟเวอร์")
@@ -42,6 +44,81 @@ new Elysia()
     } catch (err: any) {
       set.status = 404
       return { message: err.message || "ไม่พบโปรเจคที่ต้องการดู" }
+    }
+  })
+  // Public Guest Project By Name (No Auth required) — สำหรับ path /{project}/{commit}
+  .get("/api/guest/project/:name", async ({ params, set }) => {
+    try {
+      const project = await getProjectByName(params.name)
+      return {
+        project,
+        message: "ดึงข้อมูลโปรเจคสำหรับ Guest สำเร็จ"
+      }
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message || "ไม่พบโปรเจคที่ต้องการดู" }
+    }
+  })
+  // Public Deploy Status (No Auth required)
+  .get("/api/guest/deploy-status/:name", async ({ params }) => {
+    return getDeployStatus(params.name)
+  })
+  // Admin: Trigger Deploy (clone + build + serve) — ไม่บล็อก request ให้ build ทำงาน background
+  .post("/api/admin/projects/:id/deploy", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+    if (result.role !== "admin") {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+    try {
+      const project = await getProjectById(Number(params.id))
+      if (!project) {
+        set.status = 404
+        return { message: "ไม่พบโปรเจค" }
+      }
+      const current = getDeployStatus(project.name)
+      if (current.state === "building") {
+        return { message: "กำลัง Build อยู่ อย่าซ้ำซ้อน", status: current }
+      }
+      deployProject(project).catch(() => {})
+      const building = getDeployStatus(project.name)
+      return { message: "เริ่ม Deploy แล้ว", status: building }
+    } catch (err: any) {
+      set.status = 500
+      return { message: err.message || "เกิดข้อผิดพลาดในการ Deploy" }
+    }
+  })
+  // Public Guest Feedback Endpoint (No Auth required)
+  .post("/api/guest/feedbacks", async ({ body, set }) => {
+    const { token, title, message, priority, guest_name, guest_email } = body as {
+      token?: string
+      title?: string
+      message?: string
+      priority?: string
+      guest_name?: string
+      guest_email?: string
+    }
+    const cleanTitle = title?.trim()
+    const cleanMessage = message?.trim()
+    if (!token || !cleanTitle || !cleanMessage) {
+      set.status = 400
+      return { message: "กรุณากรอกข้อมูลให้ครบ (Token, หัวข้อ และรายละเอียด)" }
+    }
+    try {
+      const project = await getProjectByShareToken(token)
+      const feedback = await createGuestFeedback(
+        Number(project.id),
+        guest_name?.trim() ?? "",
+        guest_email?.trim() ?? "",
+        cleanTitle,
+        cleanMessage,
+        priority || "medium"
+      )
+      return { feedback, message: "ส่ง Feedback สำเร็จ" }
+    } catch (err: any) {
+      set.status = 404
+      return { message: err.message || "ไม่พบโปรเจคที่ต้องการส่ง Feedback" }
     }
   })
   // Git Pulse GitHub Proxy Endpoint
@@ -131,23 +208,24 @@ new Elysia()
     }
   })
   .post("/api/login", async ({ body, set }) => {
-    const { username, email, password } = body as {
+    const { identifier, username, email, password } = body as {
+      identifier?: string
       username?: string
       email?: string
       password?: string
     }
-    if (!username?.trim() || !email?.trim() || !password) {
+    const cleanIdentifier = (identifier ?? username ?? email)?.trim()
+    if (!cleanIdentifier || !password) {
       set.status = 400
 
       return {
-        message: "กรุณากรอก Username, Email และ Password ให้ครบ",
+        message: "กรุณากรอก Username/Email และ Password ให้ครบ",
       }
     }
 
     try {
       const result = await login(
-        username.trim(),
-        email.trim(),
+        cleanIdentifier,
         password
       )
 
@@ -891,6 +969,30 @@ new Elysia()
     if (!exists) {
       set.status = 404
       return { message: "ไม่พบไฟล์" }
+    }
+    return new Response(file)
+  })
+  // เสิร์ฟผล Build ที่ Deploy แล้ว — /work/{project}/*
+  .get("/work/*", async ({ params, request, set }) => {
+    const url = new URL(request.url)
+    const fullPath = decodeURIComponent(url.pathname.replace(/^\/work\//, ""))
+    const segments = fullPath.split("/").filter(Boolean)
+    if (!segments.length) {
+      set.status = 404
+      return { message: "ไม่พบโปรเจคที่ระบุ" }
+    }
+    const projectName = slugify(segments[0])
+    const fileParts = segments.slice(1)
+    const baseDir = path.join(WORK_ROOT, projectName)
+    let filePath = path.join(baseDir, ...fileParts)
+    if (fileParts.length === 0 || (await Bun.file(filePath).exists()) === false) {
+      filePath = path.join(filePath, "index.html")
+    }
+    const file = Bun.file(filePath)
+    const exists = await file.exists()
+    if (!exists) {
+      set.status = 404
+      return { message: "ไม่พบไฟล์งาน" }
     }
     return new Response(file)
   })

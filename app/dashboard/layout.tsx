@@ -12,6 +12,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter()
 
+  const [isIframe, setIsIframe] = useState(false)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.self !== window.top) {
+      setIsIframe(true)
+    }
+  }, [])
+
+  if (isIframe) {
+    return <main className="p-4 bg-gray-900 text-white min-h-screen">{children}</main>
+  }
+
   useEffect(() => {
     const user = getUser()
   console.log("user:", user)

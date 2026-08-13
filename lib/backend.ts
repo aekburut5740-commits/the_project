@@ -118,6 +118,10 @@ export const backend = {
         : "/api/gitpulse"
     ),
   guestPreview: (token: string) => apiFetch<any>(`/api/guest/preview/${token}`),
+  guestProject: (name: string) => apiFetch<any>(`/api/guest/project/${encodeURIComponent(name)}`),
+  guestDeployStatus: (name: string) => apiFetch<any>(`/api/guest/deploy-status/${encodeURIComponent(name)}`),
+  deployProject: (id: number) => apiFetch<any>(`/api/admin/projects/${id}/deploy`, { method: "POST" }),
+  guestFeedback: (body: { token: string, title: string, message: string, priority?: string, guest_name?: string, guest_email?: string }) => apiFetch(`/api/guest/feedbacks`, { method: "POST", body: JSON.stringify(body) }),
   generateShareToken: (id: number) => apiFetch<any>(`/api/admin/projects/${id}/share-token`, { method: "POST" }),
   register: (body: { username: string, email: string, password: string }) => apiFetch("/api/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: {
@@ -147,9 +151,8 @@ export function normalizeProject(project: any): Project {
   let rawWebsite = String(project.website ?? "").trim()
   const id = Number(project.id)
 
-  if (!rawWebsite || rawWebsite === "https://example.com" || rawWebsite === "example.com") {
-    const currentOrigin = typeof window !== "undefined" ? window.location.origin : ""
-    rawWebsite = currentOrigin ? `${currentOrigin}/dashboard/projects/${id}` : `/dashboard/projects/${id}`
+  if (!rawWebsite || rawWebsite === "https://example.com" || rawWebsite === "example.com" || rawWebsite.includes("/dashboard/")) {
+    rawWebsite = ""
   }
 
   return {

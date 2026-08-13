@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
+import { API_URL } from "@/lib/api"
 import { backend } from "@/lib/backend"
 import { useTheme } from "@/lib/themeContext"
 import { getUser } from "@/lib/auth"
@@ -57,6 +58,19 @@ export default function GitPage() {
   const [onlyLatestForGuest, setOnlyLatestForGuest] = useState(false)
   const [linkDisabled, setLinkDisabled] = useState(false)
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop")
+  // Deploy state
+  const [deployStatus, setDeployStatus] = useState<any>(null)
+  const [deploying, setDeploying] = useState(false)
+
+  async function refreshDeployStatus(name?: string) {
+    if (!name) return
+    try {
+      const ds = await backend.guestDeployStatus(String(name))
+      setDeployStatus(ds || null)
+    } catch {
+      setDeployStatus(null)
+    }
+  }
 
   const currentUser = getUser()
   const isGuestUser = !currentUser
@@ -81,6 +95,7 @@ export default function GitPage() {
           setSelectedProjectId(firstProj.id)
           setShareToken(firstProj.share_token || `demo-${firstProj.id}`)
           setViewCount(firstProj.view_count || 0)
+          refreshDeployStatus(String(firstProj.name))
 
           initialRepo = extractProjectRepo(firstProj)
           const gitData = await backend.gitPulse(initialRepo, firstProj.token)
@@ -110,22 +125,36 @@ export default function GitPage() {
     return projects.find((p) => Number(p.id) === Number(selectedProjectId)) || projects[0]
   }, [projects, selectedProjectId])
 
-  // Compute Active Preview URL based strictly on Selected Project + Selected Commit
+  // ลิงก์ลูกค้าแบบ path ใหม่ {origin}/{project}/{commit} — ใช้กับแถบที่อยู่และปุ่มเปิดในแท็บใหม่
+  const customerLink = useMemo(() => {
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    const slug = selectedProject?.name ? encodeURIComponent(String(selectedProject.name)) : ""
+    const hash = selectedCommit?.id ? selectedCommit.id.substring(0, 7) : "latest"
+    return slug ? `${origin}/${slug}/${hash}` : ""
+  }, [selectedProject, selectedCommit])
+
+  // Compute Active Preview URL based on Selected Project website, direct deploy URL, or Customer Link fallback
   const activePreviewUrl = useMemo(() => {
     let base = selectedProject?.website || ""
 
-    // ถ้าโปรเจคไม่ได้ระบุ website URL ไว้อย่างถูกต้อง ให้ Fallback เป็น Relative URL เพื่อป้องกัน Hydration Error
-    if (!base || base === "https://example.com" || !base.startsWith("http")) {
-      base = selectedProject?.id ? `/dashboard/projects/${selectedProject.id}` : "/dashboard/projects"
+    if (base && base.startsWith("http") && !base.includes("/dashboard/")) {
+      if (selectedCommit) {
+        const commitHash = selectedCommit.id ? selectedCommit.id.substring(0, 7) : ""
+        const hasQuery = base.includes("?")
+        return `${base}${hasQuery ? "&" : "?"}v=${commitHash}`
+      }
+      return base
     }
 
-    if (selectedCommit) {
-      const commitHash = selectedCommit.id ? selectedCommit.id.substring(0, 7) : ""
-      const hasQuery = base.includes("?")
-      return `${base}${hasQuery ? "&" : "?"}v=${commitHash}`
+    if (selectedProject?.name) {
+      const name = String(selectedProject.name)
+      if (deployStatus?.state === "ready") {
+        return `${API_URL}/work/${encodeURIComponent(name)}/`
+      }
     }
-    return base
-  }, [selectedProject, selectedCommit])
+
+    return customerLink
+  }, [selectedProject, selectedCommit, deployStatus, customerLink])
 
   const handleSelectProject = async (id: number) => {
     setSelectedProjectId(id)
@@ -133,6 +162,7 @@ export default function GitPage() {
     if (p) {
       setShareToken(p.share_token || `demo-${p.id}`)
       setViewCount(p.view_count || 0)
+      refreshDeployStatus(String(p.name))
 
       const targetRepo = extractProjectRepo(p)
 
@@ -173,9 +203,11 @@ export default function GitPage() {
 
     setShareToken(realToken)
 
-    // 2. สร้างลิงก์ไปหน้า preview สาธารณะ (ไม่ใช่หน้า dashboard ที่ต้อง login)
+    // 2. สร้างลิงก์ path แบบ /{project}/{commit} ไปหน้า preview สาธารณะ
     const origin = typeof window !== "undefined" ? window.location.origin : ""
-    const targetLink = `${origin}/preview/${realToken}`
+    const projectSlug = encodeURIComponent(String(selectedProject?.name || `project-${selectedProject.id}`))
+    const commitHash = selectedCommit?.id ? selectedCommit.id.substring(0, 7) : "latest"
+    const targetLink = `${origin}/${projectSlug}/${commitHash}`
 
     await navigator.clipboard.writeText(targetLink)
     setCopiedLink(true)
@@ -185,6 +217,33 @@ export default function GitPage() {
     alert("สร้างลิงก์แชร์ไม่สำเร็จ ลองใหม่อีกครั้ง")
   }
 }
+
+  const handleDeploy = async () => {
+    if (!selectedProject?.id) return
+    setDeploying(true)
+    setDeployStatus((prev: any) => ({ ...(prev || {}), state: "building" }))
+    try {
+      await backend.deployProject(Number(selectedProject.id))
+      const ds = await backend.guestDeployStatus(String(selectedProject.name))
+      setDeployStatus(ds || null)
+    } catch (err) {
+      console.error("Deploy failed:", err)
+      setDeployStatus({ state: "error", error: err instanceof Error ? err.message : "Deploy ไม่สำเร็จ" })
+    } finally {
+      setDeploying(false)
+    }
+  }
+
+  // Poll deploy status while building so UI updates automatically when build finishes
+  useEffect(() => {
+    if (!deployStatus || deployStatus.state !== "building") return
+    const name = selectedProject?.name ? String(selectedProject.name) : ""
+    if (!name) return
+    const timer = setInterval(() => {
+      refreshDeployStatus(name)
+    }, 2500)
+    return () => clearInterval(timer)
+  }, [deployStatus?.state, selectedProject?.name])
 
   // Theme Styles Object + responsive flags
   const [isMobile, setIsMobile] = useState(false)
@@ -309,7 +368,71 @@ export default function GitPage() {
           {linkDisabled ? <EyeOff size={16} /> : copiedLink ? <Check size={16} /> : <Copy size={16} />}
           <span>{linkDisabled ? "ลิงก์ถูกปิดกั้นอยู่" : copiedLink ? "คัดลอก Link แล้ว!" : "คัดลอก Guest Demo Link"}</span>
         </button>
+
+        {/* Deploy Button */}
+        <button
+          onClick={handleDeploy}
+          disabled={deploying || deployStatus?.state === "building"}
+          title="Build งานจาก Git Repo แล้วให้ลูกค้าเปิดดูได้ทันที (ไม่ต้องขึ้น server แยก)"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "none",
+            cursor: deployStatus?.state === "building" || deploying ? "not-allowed" : "pointer",
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#fff",
+            background: deployStatus?.state === "ready" ? "#16a34a" : "#0284c7",
+            opacity: deployStatus?.state === "building" || deploying ? 0.6 : 1,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {deployStatus?.state === "building" || deploying ? (
+            <><RotateCw size={15} className="animate-spin" /> กำลัง Build...</>
+          ) : deployStatus?.state === "ready" ? (
+            <><Check size={15} /> Deploy แล้ว</>
+          ) : deployStatus?.state === "error" ? (
+            <><Sparkles size={15} /> Deploy ใหม่</>
+          ) : (
+            <><Sparkles size={15} /> Deploy</>
+          )}
+        </button>
       </div>
+
+      {/* Deploy Status Info */}
+      {deployStatus && deployStatus.state !== "idle" && (
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12 }}>
+          {deployStatus.state === "building" && (
+            <span style={{ color: "#38bdf8", display: "flex", alignItems: "center", gap: 6 }}>
+              <RotateCw size={12} className="animate-spin" /> กำลัง Build จาก Repo...
+            </span>
+          )}
+          {deployStatus.state === "ready" && (
+            <span style={{ color: "#34d399", display: "flex", alignItems: "center", gap: 6 }}>
+              <Check size={12} /> Build สำเร็จ
+              {deployStatus.commit ? ` (commit ${deployStatus.commit})` : ""}
+              {deployStatus.lastBuildAt ? ` • ${new Date(deployStatus.lastBuildAt).toLocaleString("th-TH")}` : ""}
+              {" • "}
+              <a
+                href={`${typeof window !== "undefined" ? window.location.origin : ""}/${encodeURIComponent(String(selectedProject?.name || ""))}/latest`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "#4f8ef7", textDecoration: "underline" }}
+              >
+                เปิดหน้าลูกค้า
+              </a>
+            </span>
+          )}
+          {deployStatus.state === "error" && (
+            <span style={{ color: "#f87171", display: "flex", alignItems: "center", gap: 6 }}>
+              ❌ Build ไม่สำเร็จ: {deployStatus.error || "เกิดข้อผิดพลาด"}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Main Split Grid Layout: Left Commits Selection, Right Live Interactive Sandbox */}
       <div style={S.mainGrid}>
@@ -425,7 +548,7 @@ export default function GitPage() {
               <button onClick={() => setIframeKey((k) => k + 1)} style={S.deviceBtn} title="รีเฟรช Preview">
                 <RotateCw size={16} />
               </button>
-              <a href={activePreviewUrl} target="_blank" rel="noreferrer" style={S.deviceBtn} title="เปิดในแท็บใหม่">
+              <a href={customerLink} target="_blank" rel="noreferrer" style={S.deviceBtn} title="เปิดในแท็บใหม่">
                 <ExternalLink size={16} />
               </a>
             </div>
@@ -435,7 +558,7 @@ export default function GitPage() {
           <div style={S.addressBar}>
             <Globe size={13} className="text-slate-400" />
             <span style={{ fontSize: 12, color: isLight ? "#475569" : "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {activePreviewUrl}
+              {customerLink}
             </span>
           </div>
 
@@ -490,12 +613,22 @@ export default function GitPage() {
                 boxShadow: device !== "desktop" ? "0 20px 25px -5px rgba(0,0,0,0.3)" : "none",
               }}
             >
-              <iframe
-                key={iframeKey}
-                src={activePreviewUrl}
-                style={{ width: "100%", height: "100%", border: "none" }}
-                title="Project Interactive Live Preview"
-              />
+              {activePreviewUrl ? (
+                <iframe
+                  key={iframeKey}
+                  src={activePreviewUrl}
+                  style={{ width: "100%", height: "100%", border: "none" }}
+                  title="Project Interactive Live Preview"
+                />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: isLight ? "#64748b" : "#94a3b8", padding: 20, textAlign: "center", background: isLight ? "#f8fafc" : "#0f172a" }}>
+                  <Globe size={40} style={{ marginBottom: 12, opacity: 0.5 }} />
+                  <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6, color: isLight ? "#0f172a" : "#f8fafc" }}>ไม่มี Website Live Preview</div>
+                  <p style={{ fontSize: 13, maxWidth: 380, margin: 0, lineHeight: 1.5 }}>
+                    โปรเจกต์นี้ยังไม่ได้ระบุ Website URL หรือยังไม่ได้ทำการ Deploy ขึ้นเซิร์ฟเวอร์ กรุณากรอก Website URL ในหน้าตั้งค่าโปรเจกต์
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -20,8 +20,7 @@ export default function LoginPage() {
   const router = useRouter()
 
   const [showPassword, setShowPassword] = useState(false)
-  const [username, setUsername] = useState("")
-  const [email, setEmail] = useState("")
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [remember, setRemember] = useState(false)
 
@@ -35,11 +34,10 @@ export default function LoginPage() {
 
     setError("")
 
-    const cleanUsername = username.trim()
-    const cleanEmail = email.trim()
+    const cleanIdentifier = identifier.trim()
 
-    if (!cleanUsername || !cleanEmail || !password) {
-      setError("กรุณากรอก Username, Email และ Password ให้ครบ")
+    if (!cleanIdentifier || !password) {
+      setError("กรุณากรอก Username/Email และ Password ให้ครบ")
       return
     }
 
@@ -52,8 +50,7 @@ export default function LoginPage() {
       const data = await apiFetch<LoginResponse>("/api/login", {
         method: "POST",
         body: JSON.stringify({
-          username: cleanUsername,
-          email: cleanEmail,
+          identifier: cleanIdentifier,
           password,
         }),
       })
@@ -94,10 +91,10 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Username */}
+            {/* Username / Email */}
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1.5">
-                Username
+                Username หรือ Email
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -105,32 +102,11 @@ export default function LoginPage() {
                 </span>
                 <input
                   type="text"
-                  name="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="username"
+                  name="identifier"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="username หรือ yourname@email.com"
                   autoComplete="username"
-                  className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1.5">
-                Email
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  <MailIcon />
-                </span>
-                <input
-                  type="email"
-                  name="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="yourname@email.com"
-                  autoComplete="email"
                   className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
                 />
               </div>
@@ -224,15 +200,6 @@ function UserIcon() {
       <circle cx="12" cy="7" r="4" />
     </svg>
   )
-}
-
-function MailIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-    </svg>
-  );
 }
 
 function LockIcon() {

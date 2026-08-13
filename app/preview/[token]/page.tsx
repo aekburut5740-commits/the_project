@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { backend } from "@/lib/backend"
-import { Eye, ExternalLink, RotateCw, Smartphone, Tablet, Monitor, Sparkles, Globe } from "lucide-react"
+import { Eye, ExternalLink, RotateCw, Smartphone, Tablet, Monitor, Sparkles, Globe, MessageSquare, Send, X } from "lucide-react"
 
 export default function GuestPreviewPage() {
   const params = useParams()
@@ -18,6 +18,16 @@ export default function GuestPreviewPage() {
 
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop")
   const [iframeKey, setIframeKey] = useState(0)
+
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [fbName, setFbName] = useState("")
+  const [fbEmail, setFbEmail] = useState("")
+  const [fbTitle, setFbTitle] = useState("")
+  const [fbMessage, setFbMessage] = useState("")
+  const [fbPriority, setFbPriority] = useState<"low" | "medium" | "high">("medium")
+  const [fbSending, setFbSending] = useState(false)
+  const [fbError, setFbError] = useState("")
+  const [fbSuccess, setFbSuccess] = useState("")
 
   useEffect(() => {
     async function loadGuestPreview() {
@@ -66,11 +76,48 @@ export default function GuestPreviewPage() {
     if (token) loadGuestPreview()
   }, [token])
 
-const basePreviewUrl = project?.website || project?.domain || "http://localhost:3000"
-  
-  const activePreviewUrl = selectedCommit 
-    ? (basePreviewUrl.startsWith("http") ? `${basePreviewUrl}?commit=${selectedCommit.id.substring(0, 7)}` : `https://${basePreviewUrl}?commit=${selectedCommit.id.substring(0, 7)}`)
-    : (basePreviewUrl.startsWith("http") ? basePreviewUrl : `https://${basePreviewUrl}`)
+  async function handleSubmitFeedback(e: React.FormEvent) {
+    e.preventDefault()
+    setFbError("")
+    setFbSuccess("")
+
+    const title = fbTitle.trim()
+    const message = fbMessage.trim()
+    if (!title || !message) {
+      setFbError("กรุณากรอกหัวข้อและรายละเอียด")
+      return
+    }
+
+    setFbSending(true)
+    try {
+      await backend.guestFeedback({
+        token,
+        title,
+        message,
+        priority: fbPriority,
+        guest_name: fbName.trim(),
+        guest_email: fbEmail.trim(),
+      })
+      setFbSuccess("ส่ง Feedback เรียบร้อยแล้ว ขอบคุณครับ")
+      setFbTitle("")
+      setFbMessage("")
+      setFbPriority("medium")
+    } catch (err: unknown) {
+      setFbError(err instanceof Error ? err.message : "ส่ง Feedback ไม่สำเร็จ กรุณาลองใหม่")
+    } finally {
+      setFbSending(false)
+    }
+  }
+
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
+  const guestLink = project?.name ? `${origin}/${encodeURIComponent(String(project.name))}/${selectedCommit?.id ? selectedCommit.id.substring(0, 7) : "latest"}` : ""
+  const basePreviewUrl = (project?.website && project.website.startsWith("http") && !project.website.includes("/dashboard/")) ? project.website : guestLink
+
+  const activePreviewUrl = !basePreviewUrl
+    ? ""
+    : selectedCommit && basePreviewUrl === project?.website
+    ? (basePreviewUrl.includes("?") ? `${basePreviewUrl}&v=${selectedCommit.id.substring(0, 7)}` : `${basePreviewUrl}?v=${selectedCommit.id.substring(0, 7)}`)
+    : basePreviewUrl
   
 
   if (loading) {
@@ -106,6 +153,18 @@ const basePreviewUrl = project?.website || project?.domain || "http://localhost:
             <Eye size={14} className="text-sky-400" />
             <span>เข้าดูแล้ว {project.view_count || 1} ครั้ง</span>
           </div>
+
+          <button
+            onClick={() => {
+              setFbError("")
+              setFbSuccess("")
+              setShowFeedback(true)
+            }}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+          >
+            <MessageSquare size={14} />
+            <span>ส่ง Feedback</span>
+          </button>
 
           <a href={activePreviewUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: "#0284c7", color: "#fff", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
             <span>เปิดหน้าเว็บจริง</span>
@@ -207,16 +266,171 @@ const basePreviewUrl = project?.website || project?.domain || "http://localhost:
                 border: device !== "desktop" ? "4px solid #334155" : "none",
               }}
             >
-              <iframe
-                key={iframeKey}
-                src={activePreviewUrl}
-                style={{ width: "100%", height: "100%", border: "none" }}
-                title="Guest Live Preview"
-              />
+              {activePreviewUrl ? (
+                <iframe
+                  key={iframeKey}
+                  src={activePreviewUrl}
+                  style={{ width: "100%", height: "100%", border: "none" }}
+                  title="Guest Live Preview"
+                />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: "#94a3b8", padding: 20, textAlign: "center", background: "#0f172a" }}>
+                  <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.5 }}>🌐</div>
+                  <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6, color: "#f8fafc" }}>ไม่มี Website Live Preview</div>
+                  <p style={{ fontSize: 13, maxWidth: 380, margin: 0, lineHeight: 1.5 }}>
+                    โปรเจกต์นี้ยังไม่ได้ระบุ Website URL หรือยังไม่ได้ทำการ Deploy ขึ้นเซิร์ฟเวอร์
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Feedback Modal */}
+      {showFeedback && (
+        <div
+          onClick={() => setShowFeedback(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(2, 6, 23, 0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1000 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 440, background: "#1e293b", border: "1px solid #334155", borderRadius: 16, padding: 24 }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+                <MessageSquare size={18} className="text-emerald-400" />
+                ส่ง Feedback
+              </h3>
+              <button onClick={() => setShowFeedback(false)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }} aria-label="ปิด">
+                <X size={18} />
+              </button>
+            </div>
+
+            {fbSuccess ? (
+              <div style={{ background: "rgba(52, 211, 153, 0.1)", border: "1px solid #34d399", color: "#34d399", borderRadius: 10, padding: "16px 14px", fontSize: 14, fontWeight: 600, textAlign: "center" }}>
+                {fbSuccess}
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitFeedback} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>ชื่อของคุณ</label>
+                    <input
+                      type="text"
+                      value={fbName}
+                      onChange={(e) => setFbName(e.target.value)}
+                      placeholder="ชื่อ (ไม่บังคับ)"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>อีเมล</label>
+                    <input
+                      type="email"
+                      value={fbEmail}
+                      onChange={(e) => setFbEmail(e.target.value)}
+                      placeholder="อีเมล (ไม่บังคับ)"
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>หัวข้อ *</label>
+                  <input
+                    type="text"
+                    value={fbTitle}
+                    onChange={(e) => setFbTitle(e.target.value)}
+                    placeholder="สรุปเรื่องที่ต้องการแจ้ง"
+                    required
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>รายละเอียด *</label>
+                  <textarea
+                    value={fbMessage}
+                    onChange={(e) => setFbMessage(e.target.value)}
+                    placeholder="อธิบายปัญหา หรือความต้องการเพิ่มเติม..."
+                    required
+                    rows={4}
+                    style={{ ...inputStyle, resize: "vertical", minHeight: 90 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>ความสำคัญ</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {(["low", "medium", "high"] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setFbPriority(p)}
+                        style={{
+                          flex: 1,
+                          padding: "8px 0",
+                          borderRadius: 8,
+                          border: fbPriority === p ? "1px solid #34d399" : "1px solid #334155",
+                          background: fbPriority === p ? "rgba(52, 211, 153, 0.1)" : "#0f172a",
+                          color: fbPriority === p ? "#34d399" : "#94a3b8",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {p === "low" ? "ต่ำ" : p === "medium" ? "กลาง" : "สูง"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {fbError && (
+                  <div style={{ background: "rgba(248, 113, 113, 0.1)", border: "1px solid #f87171", color: "#f87171", borderRadius: 10, padding: "10px 12px", fontSize: 13 }}>
+                    {fbError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={fbSending}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: "10px 0",
+                    borderRadius: 10,
+                    background: "#16a34a",
+                    color: "#fff",
+                    border: "none",
+                    cursor: fbSending ? "not-allowed" : "pointer",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    opacity: fbSending ? 0.6 : 1,
+                  }}
+                >
+                  {fbSending ? "กำลังส่ง..." : <><Send size={15} /> ส่ง Feedback</>}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 38,
+  padding: "0 12px",
+  borderRadius: 8,
+  border: "1px solid #334155",
+  background: "#0f172a",
+  color: "#f8fafc",
+  fontSize: 13,
+  outline: "none",
+  boxSizing: "border-box",
 }

@@ -485,7 +485,7 @@ function EditModal({
           <SLabel label="ข้อมูลหลัก" />
           <Field label="ชื่อโปรเจค" isLight={isLight}><Input value={form.name} onChange={(v) => set("name", v)} isLight={isLight} /></Field>
           <Field label="คำอธิบาย" isLight={isLight}><textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} style={{ ...S.input, resize: "vertical" }} /></Field>
-          <Field label="Website URL (ลิงก์เปิดหน้างานจริง)" isLight={isLight}><Input value={form.website || ""} onChange={(v) => set("website", v)} placeholder="เช่น http://localhost:3000 หรือ https://example.com" isLight={isLight} /></Field>
+          <Field label="Website URL (ลิงก์เปิดหน้างานจริง)" isLight={isLight}><Input value={form.website || ""} onChange={(v) => set("website", v)} placeholder="เช่น http://localhost:3000/midterm/ หรือ https://example.com" isLight={isLight} /></Field>
           <SLabel label="สถานะและความคืบหน้า" />
           <Field label="สถานะ" isLight={isLight}>
             <select value={form.status} onChange={(e) => set("status", e.target.value)} style={S.input}>

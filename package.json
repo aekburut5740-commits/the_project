@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "bun run scripts/dev.ts",
+    "dev:web": "next dev",
+    "dev:api": "bun run backend/index.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
