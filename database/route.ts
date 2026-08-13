@@ -3,7 +3,10 @@ import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import { unlink } from "fs/promises"
 
-const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
+if (!process.env.JWT_SECRET) {
+  throw new Error("ไม่พบ JWT_SECRET ใน environment variable กรุณาตั้งค่าใน .env ก่อนรันเซิร์ฟเวอร์")
+}
+const JWT_SECRET = process.env.JWT_SECRET
 
 // สมัครสมาชิก
 export async function register(
@@ -240,7 +243,7 @@ export async function refreshToken(user_id: number) {
   const user = result.rows[0]
   const token = jwt.sign(
     { id: user.id, username: user.username, role: user.role },
-    process.env.JWT_SECRET || "mysecretkey123",
+    JWT_SECRET,
     { expiresIn: "1d" }
   )
   return { token }
@@ -632,6 +635,31 @@ export async function getMilestoneTasks(milestone_id: number) {
   return result.rows
 }
 
+// คำนวณ progress ของ milestone ใหม่ จาก tasks ทั้งหมดที่มีอยู่จริง แล้วบันทึกลงกราฟ
+// (ใช้ร่วมกันทั้งตอนเพิ่ม/แก้/ลบ task เพราะทั้ง 3 เหตุการณ์ทำให้จำนวน task เปลี่ยน)
+async function recalculateMilestoneProgress(milestone_id: number) {
+  const progressResult = await db.query(
+    `UPDATE milestones SET progress = (
+       SELECT ROUND(COUNT(*) FILTER (WHERE is_done = true) * 100.0 / NULLIF(COUNT(*), 0))
+       FROM milestone_tasks WHERE milestone_id = $1
+     ) WHERE id = $1 RETURNING progress`,
+    [milestone_id]
+  )
+
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS milestone_progress_history (
+      id SERIAL PRIMARY KEY,
+      milestone_id INTEGER REFERENCES milestones(id) ON DELETE CASCADE,
+      progress INTEGER NOT NULL,
+      recorded_at TIMESTAMP DEFAULT NOW()
+    );`
+  )
+  await db.query(
+    `INSERT INTO milestone_progress_history (milestone_id, progress) VALUES ($1, $2)`,
+    [milestone_id, progressResult.rows[0]?.progress ?? 0]
+  )
+}
+
 // Admin: สร้าง task ใหม่
 export async function createMilestoneTask(milestone_id: number, title: string) {
   await ensureMilestoneTasksTable()
@@ -639,6 +667,7 @@ export async function createMilestoneTask(milestone_id: number, title: string) {
     `INSERT INTO milestone_tasks (milestone_id, title) VALUES ($1, $2) RETURNING *`,
     [milestone_id, title]
   )
+  await recalculateMilestoneProgress(milestone_id)
   return result.rows[0]
 }
 
@@ -654,28 +683,7 @@ export async function updateMilestoneTask(id: number, title?: string, is_done?: 
   if (!result.rows.length) throw new Error("ไม่พบ task")
   const updatedTask = result.rows[0]
 
-  // คำนวณ progress ของ milestone ใหม่ จาก tasks ทั้งหมดที่มีอยู่จริง
-  const progressResult = await db.query(
-    `UPDATE milestones SET progress = (
-       SELECT ROUND(COUNT(*) FILTER (WHERE is_done = true) * 100.0 / NULLIF(COUNT(*), 0))
-       FROM milestone_tasks WHERE milestone_id = $1
-     ) WHERE id = $1 RETURNING progress`,
-    [updatedTask.milestone_id]
-  )
-
-  // บันทึกประวัติความคืบหน้า ณ เวลานี้ไว้สำหรับกราฟ
-  await db.query(
-    `CREATE TABLE IF NOT EXISTS milestone_progress_history (
-      id SERIAL PRIMARY KEY,
-      milestone_id INTEGER REFERENCES milestones(id) ON DELETE CASCADE,
-      progress INTEGER NOT NULL,
-      recorded_at TIMESTAMP DEFAULT NOW()
-    );`
-  )
-  await db.query(
-    `INSERT INTO milestone_progress_history (milestone_id, progress) VALUES ($1, $2)`,
-    [updatedTask.milestone_id, progressResult.rows[0]?.progress ?? 0]
-  )
+  await recalculateMilestoneProgress(updatedTask.milestone_id)
 
   return updatedTask
 }
@@ -687,7 +695,11 @@ export async function deleteMilestoneTask(id: number) {
     [id]
   )
   if (!result.rows.length) throw new Error("ไม่พบ task")
-  return result.rows[0]
+  const deletedTask = result.rows[0]
+
+  await recalculateMilestoneProgress(deletedTask.milestone_id)
+
+  return deletedTask
 }
 
 // ===== MILESTONE ACTIVITY LOG =====

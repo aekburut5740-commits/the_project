@@ -5,7 +5,10 @@ import jwt from "jsonwebtoken"
 import type { JwtPayload } from "jsonwebtoken"
 import path from "path"
 const UPLOADS_DIR = path.join(__dirname, "../uploads")
-const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey123"
+if (!process.env.JWT_SECRET) {
+  throw new Error("ไม่พบ JWT_SECRET ใน environment variable กรุณาตั้งค่าใน .env ก่อนรันเซิร์ฟเวอร์")
+}
+const JWT_SECRET = process.env.JWT_SECRET
 const authCheck = ({ headers, set }: any) => {
   const authHeader = headers["authorization"]
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
