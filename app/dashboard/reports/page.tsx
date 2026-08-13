@@ -199,10 +199,31 @@ function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record
       fontSize: 17,
       fontWeight: 800,
     },
+    // item-specific tokens to avoid hardcoded colors in components
+    itemTitle: {
+      color: isLight ? "#0f172a" : "#f8fafc",
+      fontSize: isMobile ? 15 : 14,
+      fontWeight: 800,
+    },
+    itemMeta: {
+      color: isLight ? "#64748b" : "#94a3b8",
+      fontSize: 12,
+      marginTop: 5,
+    },
+    muted: {
+      color: isLight ? "#64748b" : "#94a3b8",
+    },
+    filterTitle: {
+      color: isLight ? "#0f172a" : "#f8fafc",
+      fontSize: 14,
+    },
+    progressTrack: {
+      background: isLight ? "#e5e7eb" : "#0f172a",
+    },
     item: {
       borderRadius: 13,
       border: isLight ? "1px solid #e2e8f0" : "1px solid #1f2937",
-      background: isLight ? "#f8fafc" : "#0f172a",
+      background: isLight ? "#ffffff" : "#0f172a",
       padding: 15,
     },
     empty: {
@@ -407,6 +428,8 @@ function ReportsContent() {
     window.setTimeout(() => window.print(), 80)
   }
 
+  const summaryValueColor = isLight ? "#0f172a" : "#f8fafc"
+
   function downloadCsv() {
     const projectName = selectedProject?.name ?? "all-projects"
     const rows: string[][] = [
@@ -568,7 +591,7 @@ function ReportsContent() {
       {error && <div style={styles.error}>{error}</div>}
 
       <section style={styles.filterCard} className="no-print">
-        <strong style={{ color: "#f8fafc", fontSize: 14 }}>ขอบเขตรายงาน</strong>
+        <strong style={styles.filterTitle}>ขอบเขตรายงาน</strong>
         <select
           className="report-filter-select"
           style={styles.select}
@@ -582,13 +605,13 @@ function ReportsContent() {
             </option>
           ))}
         </select>
-        <span style={{ color: "#64748b", fontSize: 13 }}>
+        <span style={{ ...styles.muted, fontSize: 13 }}>
           อัปเดตล่าสุด {new Date().toLocaleString("th-TH")}
         </span>
       </section>
 
       {loading ? (
-        <div style={{ ...styles.card, textAlign: "center", color: "#94a3b8" }}>
+        <div style={{ ...styles.card, textAlign: "center", color: (styles.muted.color as string) }}>
           กำลังโหลดข้อมูลรายงาน...
         </div>
       ) : (
@@ -642,19 +665,13 @@ function ReportsContent() {
                             <div>
                               <div
                                 style={{
-                                  color: "#f8fafc",
-                                  fontSize: 15,
-                                  fontWeight: 800,
+                                    ...styles.itemTitle,
                                 }}
                               >
                                 {project.name}
                               </div>
                               <div
-                                style={{
-                                  color: "#64748b",
-                                  fontSize: 12,
-                                  marginTop: 5,
-                                }}
+                                style={styles.itemMeta}
                               >
                                 สร้างเมื่อ{" "}
                                 {formatDate(project.createdAt ?? project.created_at)}
@@ -679,13 +696,13 @@ function ReportsContent() {
                             </span>
                           </div>
 
-                          <div
+                            <div
                             style={{
                               display: "flex",
                               justifyContent: "space-between",
                               marginTop: 14,
                               marginBottom: 7,
-                              color: "#cbd5e1",
+                              color: (styles.muted.color as string),
                               fontSize: 12,
                             }}
                           >
@@ -699,7 +716,7 @@ function ReportsContent() {
                               height: 8,
                               overflow: "hidden",
                               borderRadius: 999,
-                              background: "#1e293b",
+                              background: styles.progressTrack.background,
                             }}
                           >
                             <div
@@ -753,20 +770,12 @@ function ReportsContent() {
                           >
                             <div>
                               <div
-                                style={{
-                                  color: "#f8fafc",
-                                  fontSize: 14,
-                                  fontWeight: 800,
-                                }}
+                                style={styles.itemTitle}
                               >
                                 {milestone.title}
                               </div>
-                              <div
-                                style={{
-                                  color: "#64748b",
-                                  fontSize: 12,
-                                  marginTop: 5,
-                                }}
+                                <div
+                                  style={styles.itemMeta}
                               >
                                 {projectName} · กำหนด {formatDate(milestone.dueDate)}
                               </div>
@@ -794,10 +803,10 @@ function ReportsContent() {
                 <h2 style={styles.cardTitle}>สรุปสถานะ</h2>
                 <div style={{ display: "grid", gap: 11 }}>
                   {[
-                    ["โปรเจกต์เสร็จสิ้น", completedProjects, "#34d399"],
-                    ["โปรเจกต์กำลังทำ", activeProjects, "#4f8ef7"],
-                    ["Milestone เลยกำหนด", overdueMilestones, "#f87171"],
-                    ["Feedback ยังไม่เสร็จ", openFeedbacks, "#fbbf24"],
+                    ["โปรเจกต์เสร็จสิ้น", completedProjects, summaryValueColor],
+                    ["โปรเจกต์กำลังทำ", activeProjects, summaryValueColor],
+                    ["Milestone เลยกำหนด", overdueMilestones, summaryValueColor],
+                    ["Feedback ยังไม่เสร็จ", openFeedbacks, summaryValueColor],
                   ].map(([label, value, color]) => (
                     <div
                       key={String(label)}
@@ -809,7 +818,7 @@ function ReportsContent() {
                         gap: 12,
                       }}
                     >
-                      <span style={{ color: "#cbd5e1", fontSize: 13 }}>{label}</span>
+                      <span style={{ color: (styles.muted.color as string), fontSize: 13 }}>{label}</span>
                       <strong style={{ color: String(color), fontSize: 18 }}>
                         {value}
                       </strong>
@@ -851,8 +860,7 @@ function ReportsContent() {
                             <div style={{ minWidth: 0 }}>
                               <div
                                 style={{
-                                  color: "#f8fafc",
-                                  fontWeight: 800,
+                                  ...styles.itemTitle,
                                   fontSize: 13,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
@@ -862,11 +870,7 @@ function ReportsContent() {
                                 {feedback.title}
                               </div>
                               <div
-                                style={{
-                                  color: "#64748b",
-                                  fontSize: 11,
-                                  marginTop: 5,
-                                }}
+                                style={{ ...styles.itemMeta, fontSize: 11 }}
                               >
                                 {projectName} · {formatDate(feedback.createdAt)}
                               </div>
@@ -894,7 +898,7 @@ function ReportsContent() {
                 <p
                   style={{
                     margin: 0,
-                    color: "#94a3b8",
+                    ...styles.muted,
                     fontSize: 13,
                     lineHeight: 1.8,
                   }}

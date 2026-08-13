@@ -2,7 +2,7 @@
 
 import { Suspense } from "react"
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   AlertCircle,
@@ -119,6 +119,19 @@ function MilestonesContent() {
     const adminRole = currentUser?.role === "admin"
     setIsAdmin(adminRole)
     void loadPage(adminRole)
+  }, [])
+
+  const isAdminRef = useRef(isAdmin)
+  useEffect(() => {
+    isAdminRef.current = isAdmin
+  }, [isAdmin])
+
+  useEffect(() => {
+    function handlePopState() {
+      void loadPage(isAdminRef.current)
+    }
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
   }, [])
 
   useEffect(() => {
@@ -290,9 +303,9 @@ function MilestonesContent() {
         <span
           style={{
             ...S.roleBadge,
-            background: isAdmin ? "#4f8ef722" : "#34d39922",
-            color: isAdmin ? "#4f8ef7" : "#34d399",
-            border: `1px solid ${isAdmin ? "#4f8ef744" : "#34d39944"}`,
+            background: isAdmin ? `${S.primary}22` : `${S.success}22`,
+            color: isAdmin ? S.primary : S.success,
+            border: `1px solid ${isAdmin ? `${S.primary}44` : `${S.success}44`}`,
           }}
         >
           {isAdmin
@@ -318,18 +331,18 @@ function MilestonesContent() {
       </div>
 
       <div style={S.projectTabsRow}>
-        <button
-          type="button"
-          onClick={() => setSelectedProjectId("all")}
-          style={{
-            ...S.projectTab,
-            background: selectedProjectId === "all" ? "#4f8ef7" : (isLight ? "#ffffff" : "#111827"),
-            color: selectedProjectId === "all" ? "#fff" : (isLight ? "#334155" : "#9ca3af"),
-            borderColor: selectedProjectId === "all" ? "#4f8ef7" : (isLight ? "#cbd5e1" : "#1f2937"),
-          }}
-        >
-          ทุกโปรเจค
-        </button>
+          <button
+            type="button"
+            onClick={() => setSelectedProjectId("all")}
+            style={{
+              ...S.projectTab,
+              background: selectedProjectId === "all" ? S.tabActiveBg : S.tabBg,
+              color: selectedProjectId === "all" ? S.tabActiveText : S.tabInactiveText,
+              borderColor: selectedProjectId === "all" ? S.tabActiveBg : (isLight ? "#cbd5e1" : "#1f2937"),
+            }}
+          >
+            ทุกโปรเจค
+          </button>
         {projects.map((project) => (
           <button
             key={project.id}
@@ -337,9 +350,9 @@ function MilestonesContent() {
             onClick={() => setSelectedProjectId(project.id)}
             style={{
               ...S.projectTab,
-              background: selectedProjectId === project.id ? "#4f8ef7" : (isLight ? "#ffffff" : "#111827"),
-              color: selectedProjectId === project.id ? "#fff" : (isLight ? "#334155" : "#9ca3af"),
-              borderColor: selectedProjectId === project.id ? "#4f8ef7" : (isLight ? "#cbd5e1" : "#1f2937"),
+              background: selectedProjectId === project.id ? S.tabActiveBg : S.tabBg,
+              color: selectedProjectId === project.id ? S.tabActiveText : S.tabInactiveText,
+              borderColor: selectedProjectId === project.id ? S.tabActiveBg : (isLight ? "#cbd5e1" : "#1f2937"),
             }}
           >
             {project.name}
@@ -357,8 +370,8 @@ function MilestonesContent() {
                 onClick={() => setFilterStatus(status)}
                 style={{
                   ...S.tabBtn,
-                  background: filterStatus === status ? "#1f2937" : "transparent",
-                  color: filterStatus === status ? "#f9fafb" : "#6b7280",
+                  background: filterStatus === status ? S.tabActiveBg : "transparent",
+                  color: filterStatus === status ? S.tabActiveText : S.muted,
                 }}
               >
                 {status === "all" ? "ทั้งหมด" : STATUS_CONFIG[status].label}
@@ -483,10 +496,7 @@ function MilestoneCard({
               <StatusIcon size={11} /> {label}
             </span>
 
-            <Link
-              href={`/dashboard/milestones/${milestone.id}`}
-              style={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 7, color: "#9ca3af", fontSize: 12, fontWeight: 600, padding: "5px 12px", textDecoration: "none" }}
-            >
+            <Link href={`/dashboard/milestones/${milestone.id}`} style={S.linkBtn}>
               ดูรายละเอียด
             </Link>
 
@@ -518,8 +528,8 @@ function MilestoneCard({
         </div>
 
         <div style={S.dateRow}>
-          <Calendar size={12} color="#4b5563" />
-          <span style={{ color: milestone.status === "overdue" ? "#f87171" : "#6b7280" }}>
+          <Calendar size={12} color={S.iconColor} />
+          <span style={{ color: milestone.status === "overdue" ? S.overdueColor : S.muted }}>
             {formatDateRange(milestone.startDate, milestone.dueDate)}
           </span>
         </div>
@@ -825,8 +835,22 @@ function Input({
   )
 }
 
-function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): any {
+  const primary = "#4f8ef7"
+  const success = "#34d399"
+  const danger = "#f87171"
+  const muted = isLight ? "#64748b" : "#9ca3af"
+  const surface = isLight ? "#ffffff" : "#111827"
+  const surfaceText = isLight ? "#334155" : "#9ca3af"
+
   return {
+    // tokens
+    primary,
+    success,
+    danger,
+    muted,
+    surface,
+    surfaceText,
     page: {
       background: isLight ? "#f8fafc" : "#0d1117",
       minHeight: "100vh",
@@ -1061,7 +1085,7 @@ function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record
     sectionLabel: {
       fontSize: 11,
       fontWeight: 700,
-      color: "#4f8ef7",
+      color: primary,
       letterSpacing: "0.1em",
       textTransform: "uppercase",
       marginTop: 4,
@@ -1078,6 +1102,26 @@ function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record
       width: "100%",
       boxSizing: "border-box",
     },
+    // tab/button tokens
+    tabActiveBg: primary,
+    tabActiveText: "#ffffff",
+    tabInactiveText: surfaceText,
+    tabBg: surface,
+    linkBtn: {
+      background: isLight ? surface : "#0f172a",
+      border: isLight ? "1px solid #cbd5e1" : "1px solid #374151",
+      borderRadius: 7,
+      color: isLight ? surfaceText : "#9ca3af",
+      fontSize: 12,
+      fontWeight: 600,
+      padding: "5px 12px",
+      textDecoration: "none",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+    },
+    iconColor: isLight ? "#4b5563" : "#9ca3af",
+    overdueColor: danger,
     twoColumns: { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 },
     saveBtn: {
       background: "#4f8ef7",

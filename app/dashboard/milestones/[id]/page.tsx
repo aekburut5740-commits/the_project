@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
     Check,
@@ -156,12 +156,26 @@ export default function MilestoneDetailPage() {
         }
     }
 
+    // อัปเดตกราฟทันทีจากข้อมูล task ในเครื่อง ไม่ต้องรอ server ตอบกลับ
+    function pushOptimisticProgress(nextTasks: Task[]) {
+        const done = nextTasks.filter((t) => t.is_done).length
+        const value = nextTasks.length > 0 ? Math.round((done / nextTasks.length) * 100) : 0
+        setProgressHistory((prev) => [
+            ...prev,
+            { id: Date.now(), progress: value, recorded_at: new Date().toISOString() },
+        ])
+    }
+
     async function handleAddTask() {
         if (!newTask.trim()) return
         setAddingTask(true)
         try {
             const created = await backend.createMilestoneTask(Number(id), newTask.trim())
-            setTasks((prev) => [...prev, created])
+            setTasks((prev) => {
+                const next = [...prev, created]
+                pushOptimisticProgress(next)
+                return next
+            })
             setNewTask("")
             void refreshSecondary()
         } catch {
@@ -174,7 +188,11 @@ export default function MilestoneDetailPage() {
     async function handleToggleTask(task: Task) {
         try {
             const updated = await backend.updateMilestoneTask(task.id, { is_done: !task.is_done })
-            setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, is_done: updated.is_done } : t))
+            setTasks((prev) => {
+                const next = prev.map((t) => t.id === task.id ? { ...t, is_done: updated.is_done } : t)
+                pushOptimisticProgress(next)
+                return next
+            })
             void refreshSecondary()
         } catch {
             setError("อัปเดต task ไม่สำเร็จ")
@@ -200,7 +218,11 @@ export default function MilestoneDetailPage() {
         if (!confirm("ลบ task นี้?")) return
         try {
             await backend.deleteMilestoneTask(taskId)
-            setTasks((prev) => prev.filter((t) => t.id !== taskId))
+            setTasks((prev) => {
+                const next = prev.filter((t) => t.id !== taskId)
+                pushOptimisticProgress(next)
+                return next
+            })
             void refreshSecondary()
         } catch {
             setError("ลบ task ไม่สำเร็จ")

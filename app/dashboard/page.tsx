@@ -387,7 +387,7 @@ export default function DashboardPage() {
             <div style={S.empty}>ไม่มี Milestone ที่ต้องติดตาม</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {dashboardData.upcomingMilestones.slice(0, 5).map((milestone) => {
+              {dashboardData.upcomingMilestones.map((milestone) => {
                 const project = projects.find((item) => item.id === milestone.projectId)
                 const statusConfig = MILESTONE_STATUS_CONFIG[milestone.resolvedStatus] ?? {
                   label: milestone.resolvedStatus || "ไม่ระบุสถานะ",

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useLayoutEffect, useState } from "react";
 
 type Theme = "dark" | "light";
 
@@ -15,13 +15,11 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
 
-  if (typeof document !== "undefined") {
-    document.documentElement.classList.add("dark")
-  }
-
-  useEffect(() => {
+  // ใช้ useLayoutEffect แทน useEffect เพราะรันก่อน browser paint
+  // (useEffect ปกติรันหลัง paint ไปแล้ว เลยเห็น dark แวบก่อนสลับเป็น light)
+  useLayoutEffect(() => {
     const saved = localStorage.getItem("app_theme") as Theme | null;
-    const active = (saved && (saved === "dark" || saved === "light")) ? saved : "dark";
+    const active = saved === "light" ? "light" : "dark";
     setThemeState(active);
     if (active === "dark") {
       document.documentElement.classList.add("dark");

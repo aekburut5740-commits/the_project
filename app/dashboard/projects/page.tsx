@@ -243,7 +243,7 @@ export default function ProjectsPage() {
         <div style={S.tabGroup}>
           {(["all", "pending", "in_progress", "completed"] as const).map((s) => (
             <button key={s} onClick={() => setFilterStatus(s)}
-              style={{ ...S.tabBtn, background: filterStatus === s ? "#1f2937" : "transparent", color: filterStatus === s ? "#f9fafb" : "#6b7280" }}>
+              style={{ ...S.tabBtn, background: filterStatus === s ? S.tabActiveBg : "transparent", color: filterStatus === s ? S.tabActiveText : S.tabInactiveText }}>
               {s === "all" ? "ทั้งหมด" : STATUS_CONFIG[s].label}
             </button>
           ))}
@@ -600,7 +600,20 @@ function normalizeWebsiteUrl(value: string): string {
   return `https://${website}`
 }
 
-function getStyles(isLight: boolean, isMobile = false, isTablet = false): Record<string, React.CSSProperties> {  return {
+function getStyles(isLight: boolean, isMobile = false, isTablet = false): any {
+  const primary = "#4f8ef7"
+  const muted = isLight ? "#64748b" : "#9ca3af"
+  const tabBg = isLight ? "#ffffff" : "#111827"
+  const tabActiveBg = primary
+  const tabActiveText = "#ffffff"
+  const tabInactiveText = isLight ? "#6b7280" : "#9ca3af"
+  return {
+    primary,
+    muted,
+    tabBg,
+    tabActiveBg,
+    tabActiveText,
+    tabInactiveText,
     page: { background: isLight ? "#f8fafc" : "#0d1117", minHeight: "100vh", padding: isMobile ? "16px" : "28px 32px", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: isLight ? "#0f172a" : "#e5e7eb" },
     header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
     title: { fontSize: 24, fontWeight: 700, color: isLight ? "#0f172a" : "#f9fafb", margin: 0, letterSpacing: "-0.02em" },
