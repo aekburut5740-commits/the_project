@@ -1,13 +1,38 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { backend } from "@/lib/backend"
 import { Eye, ExternalLink, RotateCw, Smartphone, Tablet, Monitor, Sparkles, Globe } from "lucide-react"
 
+function extractProjectRepo(p: any): string {
+  if (!p) return ""
+
+  const candidates = [p.domain, p.website, p.token]
+  for (const raw of candidates) {
+    if (!raw || typeof raw !== "string") continue
+    const source = raw.trim()
+
+    if (source.includes("github.com/")) {
+      const parts = source.replace(/\.git$/, "").split("github.com/")
+      if (parts[1]) return parts[1].trim()
+    }
+
+    if (source.includes("/") && !source.startsWith("http://") && !source.startsWith("https://")) {
+      return source.trim()
+    }
+  }
+
+  return ""
+}
+
 export default function GuestPreviewPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const token = (params?.token as string) || ""
+  const requestedCommitHash = searchParams.get("v") || searchParams.get("commit") || ""
+  const requestedRepo = searchParams.get("repo") || ""
+  const requestedGitToken = searchParams.get("gitToken") || searchParams.get("token") || ""
 
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -23,11 +48,14 @@ export default function GuestPreviewPage() {
     async function loadGuestPreview() {
       try {
         setLoading(true)
+
+        let projectData: any = null
+
         // 1. Fetch Project Details by Share Token
         try {
           const data = await backend.guestPreview(token)
           if (data && (data.project || data.id)) {
-            setProject(data.project || data)
+            projectData = data.project || data
           } else {
             throw new Error("ไม่พบโปรเจคในระบบ")
           }
@@ -35,20 +63,30 @@ export default function GuestPreviewPage() {
           // If token is fallback demo format (e.g. demo-1) or backend guest API not available, construct demo project
           const projIdMatch = token.match(/\d+/)
           const projId = projIdMatch ? projIdMatch[0] : "1"
-          setProject({
+          projectData = {
             id: Number(projId),
             name: `Project Demo #${projId}`,
             domain: "http://localhost:3000/dashboard/projects",
             view_count: 1,
-          })
+          }
         }
 
-        // 2. Fetch Recent Commits
+        setProject(projectData)
+
+        // 2. Fetch Recent Commits for the actual project behind this token
         try {
-          const gitData = await backend.gitPulse()
+          const repo = requestedRepo || extractProjectRepo(projectData)
+          const gitToken = requestedGitToken || projectData?.token || undefined
+          const gitData = await backend.gitPulse(repo || undefined, gitToken || undefined)
           if (gitData && gitData.commits && gitData.commits.length > 0) {
-            setCommits(gitData.commits)
-            setSelectedCommit(gitData.commits[0]) // Default select latest commit
+            const commits = gitData.commits
+            setCommits(commits)
+
+            const matchingCommit = requestedCommitHash
+              ? commits.find((c: any) => c.id?.toString().startsWith(requestedCommitHash)) || commits[0]
+              : commits[0]
+
+            setSelectedCommit(matchingCommit)
           }
         } catch {
           // Fallback demo commit
@@ -64,12 +102,12 @@ export default function GuestPreviewPage() {
     }
 
     if (token) loadGuestPreview()
-  }, [token])
+  }, [token, requestedCommitHash])
 
 const basePreviewUrl = project?.website || project?.domain || "http://localhost:3000"
   
-  const activePreviewUrl = selectedCommit 
-    ? (basePreviewUrl.startsWith("http") ? `${basePreviewUrl}?commit=${selectedCommit.id.substring(0, 7)}` : `https://${basePreviewUrl}?commit=${selectedCommit.id.substring(0, 7)}`)
+  const activePreviewUrl = selectedCommit
+    ? (basePreviewUrl.startsWith("http") ? `${basePreviewUrl}${basePreviewUrl.includes("?") ? "&" : "?"}v=${selectedCommit.id.substring(0, 7)}` : `https://${basePreviewUrl}${basePreviewUrl.includes("?") ? "&" : "?"}v=${selectedCommit.id.substring(0, 7)}`)
     : (basePreviewUrl.startsWith("http") ? basePreviewUrl : `https://${basePreviewUrl}`)
   
 

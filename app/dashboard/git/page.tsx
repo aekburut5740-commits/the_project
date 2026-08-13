@@ -62,8 +62,12 @@ export default function GitPage() {
   const isGuestUser = !currentUser
 
   useEffect(() => {
-    const user = getUser()
-    setIsAdmin(user?.role === "admin")
+    if (currentUser && currentUser.role !== "admin") {
+      window.location.href = "/dashboard"
+      return
+    }
+
+    setIsAdmin(currentUser?.role === "admin")
 
     async function loadData() {
       try {
@@ -163,8 +167,8 @@ export default function GitPage() {
   if (!selectedProject?.id) return
 
   try {
-    // 1. เรียก backend สร้าง share token จริง (หรือดึงตัวเดิมถ้ามีอยู่แล้ว)
-    const updated = await backend.generateShareToken(selectedProject.id)
+    const adminRole = currentUser?.role === "admin"
+    const updated = await backend.generateShareToken(selectedProject.id, adminRole ? "admin" : "customer")
     const realToken = updated?.share_token
 
     if (!realToken) {
@@ -174,10 +178,34 @@ export default function GitPage() {
     setShareToken(realToken)
 
     // 2. สร้างลิงก์ไปหน้า preview สาธารณะ (ไม่ใช่หน้า dashboard ที่ต้อง login)
+    // ส่ง repo และ token ของ project ที่เลือกอยู่ด้วย เพื่อให้หน้า guest preview ดึง Git commit จาก repo เดียวกันจริง ๆ
     const origin = typeof window !== "undefined" ? window.location.origin : ""
-    const targetLink = `${origin}/preview/${realToken}`
+    const commitHash = selectedCommit?.id ? selectedCommit.id.substring(0, 7) : ""
+    const repo = extractProjectRepo(selectedProject)
+    const params = new URLSearchParams()
+    if (commitHash) params.set("v", commitHash)
+    if (repo) params.set("repo", repo)
+    if (selectedProject?.token) params.set("gitToken", selectedProject.token)
+    const targetLink = `${origin}/preview/${realToken}${params.toString() ? `?${params.toString()}` : ""}`
 
-    await navigator.clipboard.writeText(targetLink)
+    const copyToClipboard = async (text: string) => {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+        return
+      }
+
+      const textArea = document.createElement("textarea")
+      textArea.value = text
+      textArea.setAttribute("readonly", "")
+      textArea.style.position = "fixed"
+      textArea.style.left = "-9999px"
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textArea)
+    }
+
+    await copyToClipboard(targetLink)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2500)
   } catch (err) {

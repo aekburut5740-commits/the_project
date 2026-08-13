@@ -1,4 +1,4 @@
-import { register, login, getProfile, getProjects, createProject, getAllProjects, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead, getMilestoneTasks, createMilestoneTask, updateMilestoneTask, deleteMilestoneTask, createMilestoneLog, getMilestoneLogs, getMilestoneProgressHistory } from "../database/route";
+import { register, login, getProfile, getProjects, createProject, getAllProjects, getProjectById, updateProjectStatus, getAllUsers, updateProject, updateAdminProject, deleteProject, refreshToken, getDashboardSummary, getProjectHealth, updateProjectProgress, getAdminDashboard, createNotification, getNotifications, markAsRead, markAllAsRead, deleteNotification, getComments, createComment, deleteComment, saveFile, getFiles, deleteFile, createLog, getProjectLogs, getAllLogs, getMilestones, createMilestone, updateMilestone, deleteMilestone, createFeedback, getFeedbacks, getAllFeedbacks, updateFeedbackStatus, createFeedbackReply, getFeedbackReplies, getReport, getAdminReport, checkMilestoneDue, getMaintenanceStatus, setMaintenanceMode, clickNotification, saveWebhook, getWebhooks, updateProfile, changePassword, getProjectMembers, addProjectMember, removeProjectMember, getProjectByShareToken, generateShareToken, markFeedbackAsRead, getUnreadCount, markRepliesAsRead, getMilestoneTasks, createMilestoneTask, updateMilestoneTask, deleteMilestoneTask, createMilestoneLog, getMilestoneLogs, getMilestoneProgressHistory } from "../database/route";
 import { cors } from "@elysiajs/cors"
 import { Elysia } from "elysia"
 import jwt from "jsonwebtoken"
@@ -84,7 +84,30 @@ new Elysia()
       return { message: "เกิดข้อผิดพลาดขณะเชื่อมต่อ GitHub" }
     }
   })
-  // Admin: Generate Share Token
+  .post("/api/projects/:id/share-token", async ({ headers, set, params }) => {
+    const result = authCheck({ headers, set })
+    if (set.status === 401) return result
+
+    const project = await getProjectById(Number(params.id))
+    if (!project) {
+      set.status = 404
+      return { message: "ไม่พบโปรเจค" }
+    }
+
+    if (result.role !== "admin" && project.user_id !== result.id) {
+      set.status = 403
+      return { message: "ไม่มีสิทธิ์เข้าถึง" }
+    }
+
+    try {
+      const updated = await generateShareToken(Number(params.id))
+      return updated
+    } catch (err: any) {
+      set.status = 400
+      return { message: err.message }
+    }
+  })
+  // Admin: Generate Share Token (legacy compatibility)
   .post("/api/admin/projects/:id/share-token", async ({ headers, set, params }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result

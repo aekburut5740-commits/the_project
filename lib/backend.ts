@@ -118,7 +118,13 @@ export const backend = {
         : "/api/gitpulse"
     ),
   guestPreview: (token: string) => apiFetch<any>(`/api/guest/preview/${token}`),
-  generateShareToken: (id: number) => apiFetch<any>(`/api/admin/projects/${id}/share-token`, { method: "POST" }),
+  generateShareToken: (id: number, role?: "admin" | "customer") =>
+    apiFetch<any>(
+      role === "admin"
+        ? `/api/admin/projects/${id}/share-token`
+        : `/api/projects/${id}/share-token`,
+      { method: "POST" }
+    ),
   register: (body: { username: string, email: string, password: string }) => apiFetch("/api/register", { method: "POST", body: JSON.stringify(body) }),
   login: (body: {
     username: string

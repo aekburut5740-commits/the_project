@@ -36,7 +36,6 @@ const navItems = [
   { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
   { label: "Feedback Center", href: "/dashboard/feedback", icon: MessageSquare },
   { label: "Document Vault", href: "/dashboard/documents", icon: FileText },
-  { label: "Git Pulse", href: "/dashboard/git", icon: GitBranch },
   { label: "Reports", href: "/dashboard/reports", icon: BarChart2 },
 ];
 
@@ -179,7 +178,7 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
   const inner = (
     <>
       <nav className="flex-1 px-3 pt-4 space-y-0.5">
-        {navItems.map(({ label, href, icon: Icon }) => {
+        {(isAdmin ? [...navItems, { label: "Git Pulse", href: "/dashboard/git", icon: GitBranch }] : navItems).map(({ label, href, icon: Icon }) => {
           const active = pathname === href;
           const isNotif = href === "/dashboard/notifications";
           const isFeedback = href === "/dashboard/feedback";
