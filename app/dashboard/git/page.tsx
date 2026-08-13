@@ -19,18 +19,45 @@ const dayLabels = ["S", "M", "T", "W", "T", "F", "S"]
 
 function extractProjectRepo(p: any): string {
   if (!p) return ""
+
   const candidates = [p.domain, p.website, p.token]
-  for (const raw of candidates) {
-    if (!raw || typeof raw !== "string") continue
-    const source = raw.trim()
-    if (source.includes("github.com/")) {
-      const parts = source.replace(/\.git$/, "").split("github.com/")
-      if (parts[1]) return parts[1].trim()
-    }
-    if (source.includes("/") && !source.startsWith("http://") && !source.startsWith("https://")) {
-      return source.trim()
-    }
+
+  const normalizeGitHubRepo = (value: string): string => {
+    if (!value || typeof value !== "string") return ""
+
+    const trimmed = value.trim()
+    if (!trimmed) return ""
+
+    const withoutGitSuffix = trimmed.replace(/\.git$/i, "")
+    const withoutProtocol = withoutGitSuffix
+      .replace(/^https?:\/\//i, "")
+      .replace(/^git@github\.com:/i, "")
+      .replace(/^www\./i, "")
+
+    const afterGithubHost = withoutProtocol.includes("github.com/")
+      ? withoutProtocol.split("github.com/")[1]
+      : withoutProtocol
+
+    const clean = afterGithubHost
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "")
+      .trim()
+
+    if (!clean) return ""
+
+    const looksLikeRepo = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(clean)
+    if (!looksLikeRepo) return ""
+
+    if (/^(dashboard|projects|login|api|preview|uploads|public|admin|customer|localhost)/i.test(clean)) return ""
+
+    return clean
   }
+
+  for (const raw of candidates) {
+    const repo = normalizeGitHubRepo(raw)
+    if (repo) return repo
+  }
+
   return ""
 }
 
