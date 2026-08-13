@@ -140,6 +140,14 @@ export async function getAllProjects() {
   return result.rows
 }
 
+export async function getProjectById(projectId: number) {
+  const result = await db.query(
+    `SELECT * FROM projects WHERE id = $1 LIMIT 1`,
+    [projectId]
+  )
+  return result.rows[0] || null
+}
+
 // Admin: อัปเดตสถานะโปรเจค
 export async function getProjectById(id: number) {
   const result = await db.query(

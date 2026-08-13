@@ -1,13 +1,61 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { backend } from "@/lib/backend"
 import { Eye, ExternalLink, RotateCw, Smartphone, Tablet, Monitor, Sparkles, Globe, MessageSquare, Send, X } from "lucide-react"
 
+function extractProjectRepo(p: any): string {
+  if (!p) return ""
+
+  const candidates = [p.domain, p.website, p.token]
+
+  const normalizeGitHubRepo = (value: string): string => {
+    if (!value || typeof value !== "string") return ""
+
+    const trimmed = value.trim()
+    if (!trimmed) return ""
+
+    const withoutGitSuffix = trimmed.replace(/\.git$/i, "")
+    const withoutProtocol = withoutGitSuffix
+      .replace(/^https?:\/\//i, "")
+      .replace(/^git@github\.com:/i, "")
+      .replace(/^www\./i, "")
+
+    const afterGithubHost = withoutProtocol.includes("github.com/")
+      ? withoutProtocol.split("github.com/")[1]
+      : withoutProtocol
+
+    const clean = afterGithubHost
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "")
+      .trim()
+
+    if (!clean) return ""
+
+    const looksLikeRepo = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(clean)
+    if (!looksLikeRepo) return ""
+
+    if (/^(dashboard|projects|login|api|preview|uploads|public|admin|customer|localhost)/i.test(clean)) return ""
+
+    return clean
+  }
+
+  for (const raw of candidates) {
+    const repo = normalizeGitHubRepo(raw)
+    if (repo) return repo
+  }
+
+  return ""
+}
+
 export default function GuestPreviewPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const token = (params?.token as string) || ""
+  const requestedCommitHash = searchParams.get("v") || searchParams.get("commit") || ""
+  const requestedRepo = searchParams.get("repo") || ""
+  const requestedGitToken = searchParams.get("gitToken") || searchParams.get("token") || ""
 
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -33,11 +81,14 @@ export default function GuestPreviewPage() {
     async function loadGuestPreview() {
       try {
         setLoading(true)
+
+        let projectData: any = null
+
         // 1. Fetch Project Details by Share Token
         try {
           const data = await backend.guestPreview(token)
           if (data && (data.project || data.id)) {
-            setProject(data.project || data)
+            projectData = data.project || data
           } else {
             throw new Error("ไม่พบโปรเจคในระบบ")
           }
@@ -45,20 +96,30 @@ export default function GuestPreviewPage() {
           // If token is fallback demo format (e.g. demo-1) or backend guest API not available, construct demo project
           const projIdMatch = token.match(/\d+/)
           const projId = projIdMatch ? projIdMatch[0] : "1"
-          setProject({
+          projectData = {
             id: Number(projId),
             name: `Project Demo #${projId}`,
             domain: "http://localhost:3000/dashboard/projects",
             view_count: 1,
-          })
+          }
         }
 
-        // 2. Fetch Recent Commits
+        setProject(projectData)
+
+        // 2. Fetch Recent Commits for the actual project behind this token
         try {
-          const gitData = await backend.gitPulse()
+          const repo = requestedRepo || extractProjectRepo(projectData)
+          const gitToken = requestedGitToken || projectData?.token || undefined
+          const gitData = await backend.gitPulse(repo || undefined, gitToken || undefined)
           if (gitData && gitData.commits && gitData.commits.length > 0) {
-            setCommits(gitData.commits)
-            setSelectedCommit(gitData.commits[0]) // Default select latest commit
+            const commits = gitData.commits
+            setCommits(commits)
+
+            const matchingCommit = requestedCommitHash
+              ? commits.find((c: any) => c.id?.toString().startsWith(requestedCommitHash)) || commits[0]
+              : commits[0]
+
+            setSelectedCommit(matchingCommit)
           }
         } catch {
           // Fallback demo commit
@@ -74,7 +135,7 @@ export default function GuestPreviewPage() {
     }
 
     if (token) loadGuestPreview()
-  }, [token])
+  }, [token, requestedCommitHash])
 
   async function handleSubmitFeedback(e: React.FormEvent) {
     e.preventDefault()

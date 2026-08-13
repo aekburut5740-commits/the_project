@@ -20,18 +20,45 @@ const dayLabels = ["S", "M", "T", "W", "T", "F", "S"]
 
 function extractProjectRepo(p: any): string {
   if (!p) return ""
+
   const candidates = [p.domain, p.website, p.token]
-  for (const raw of candidates) {
-    if (!raw || typeof raw !== "string") continue
-    const source = raw.trim()
-    if (source.includes("github.com/")) {
-      const parts = source.replace(/\.git$/, "").split("github.com/")
-      if (parts[1]) return parts[1].trim()
-    }
-    if (source.includes("/") && !source.startsWith("http://") && !source.startsWith("https://")) {
-      return source.trim()
-    }
+
+  const normalizeGitHubRepo = (value: string): string => {
+    if (!value || typeof value !== "string") return ""
+
+    const trimmed = value.trim()
+    if (!trimmed) return ""
+
+    const withoutGitSuffix = trimmed.replace(/\.git$/i, "")
+    const withoutProtocol = withoutGitSuffix
+      .replace(/^https?:\/\//i, "")
+      .replace(/^git@github\.com:/i, "")
+      .replace(/^www\./i, "")
+
+    const afterGithubHost = withoutProtocol.includes("github.com/")
+      ? withoutProtocol.split("github.com/")[1]
+      : withoutProtocol
+
+    const clean = afterGithubHost
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "")
+      .trim()
+
+    if (!clean) return ""
+
+    const looksLikeRepo = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(clean)
+    if (!looksLikeRepo) return ""
+
+    if (/^(dashboard|projects|login|api|preview|uploads|public|admin|customer|localhost)/i.test(clean)) return ""
+
+    return clean
   }
+
+  for (const raw of candidates) {
+    const repo = normalizeGitHubRepo(raw)
+    if (repo) return repo
+  }
+
   return ""
 }
 
@@ -76,8 +103,12 @@ export default function GitPage() {
   const isGuestUser = !currentUser
 
   useEffect(() => {
-    const user = getUser()
-    setIsAdmin(user?.role === "admin")
+    if (currentUser && currentUser.role !== "admin") {
+      window.location.href = "/dashboard"
+      return
+    }
+
+    setIsAdmin(currentUser?.role === "admin")
 
     async function loadData() {
       try {
@@ -193,8 +224,8 @@ export default function GitPage() {
   if (!selectedProject?.id) return
 
   try {
-    // 1. เรียก backend สร้าง share token จริง (หรือดึงตัวเดิมถ้ามีอยู่แล้ว)
-    const updated = await backend.generateShareToken(selectedProject.id)
+    const adminRole = currentUser?.role === "admin"
+    const updated = await backend.generateShareToken(selectedProject.id, adminRole ? "admin" : "customer")
     const realToken = updated?.share_token
 
     if (!realToken) {
@@ -209,7 +240,24 @@ export default function GitPage() {
     const commitHash = selectedCommit?.id ? selectedCommit.id.substring(0, 7) : "latest"
     const targetLink = `${origin}/${projectSlug}/${commitHash}`
 
-    await navigator.clipboard.writeText(targetLink)
+    const copyToClipboard = async (text: string) => {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+        return
+      }
+
+      const textArea = document.createElement("textarea")
+      textArea.value = text
+      textArea.setAttribute("readonly", "")
+      textArea.style.position = "fixed"
+      textArea.style.left = "-9999px"
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textArea)
+    }
+
+    await copyToClipboard(targetLink)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2500)
   } catch (err) {
