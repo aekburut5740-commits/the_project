@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 import { removeToken, setToken } from "@/lib/auth"
@@ -171,7 +172,7 @@ export default function LoginPage() {
               {loading ? "กำลังเข้าสู่ระบบ..." : "Login"}
             </button>
             <div className="mt-4 text-center">
-              <a href="/createaccoute" className="text-sm font-medium text-indigo-600 hover:underline">ยังไม่มีบัญชี? สร้างบัญชีใหม่</a>
+              <Link href="/createaccoute" className="text-sm font-medium text-indigo-600 hover:underline">ยังไม่มีบัญชี? สร้างบัญชีใหม่</Link>
             </div>
           </form>
         </div>

@@ -120,7 +120,10 @@ export const backend = {
   guestPreview: (token: string) => apiFetch<any>(`/api/guest/preview/${token}`),
   guestProject: (name: string) => apiFetch<any>(`/api/guest/project/${encodeURIComponent(name)}`),
   guestDeployStatus: (name: string) => apiFetch<any>(`/api/guest/deploy-status/${encodeURIComponent(name)}`),
-  deployProject: (id: number) => apiFetch<any>(`/api/admin/projects/${id}/deploy`, { method: "POST" }),
+  deployProject: (id: number, commit?: string) => apiFetch<any>(`/api/admin/projects/${id}/deploy`, {
+    method: "POST",
+    body: JSON.stringify({ commit }),
+  }),
   guestFeedback: (body: { token: string, title: string, message: string, priority?: string, guest_name?: string, guest_email?: string }) => apiFetch(`/api/guest/feedbacks`, { method: "POST", body: JSON.stringify(body) }),
   generateShareToken: (id: number, role?: "admin" | "customer") =>
     apiFetch<any>(

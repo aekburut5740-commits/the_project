@@ -39,7 +39,7 @@ export function isTokenExpired(): boolean {
   return Date.now() / 1000 > user.exp
 }
 
-export function authHeader(): { Authorization: string } | {} {
+export function authHeader(): { Authorization: string } | Record<string, never> {
   const token = getToken()
   if (!token) return {}
   return { Authorization: `Bearer ${token}` }

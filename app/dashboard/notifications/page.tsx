@@ -60,13 +60,15 @@ export default function NotificationsPage() {
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
 
+  const [now] = useState(() => Date.now())
+
   const grouped = useMemo(() => {
-    const cutoff = Date.now() - 1000 * 60 * 60 * 24
+    const cutoff = now - 1000 * 60 * 60 * 24
     return {
       today: notifications.filter((n) => new Date(n.created_at).getTime() > cutoff),
       earlier: notifications.filter((n) => new Date(n.created_at).getTime() <= cutoff),
     }
-  }, [notifications])
+  }, [notifications, now])
 
   const handleMarkRead = async (id: number) => {
     try {

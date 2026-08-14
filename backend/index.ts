@@ -30,6 +30,17 @@ const authCheck = ({ headers, set }: any) => {
     return { message: "Token ไม่ถูกต้องหรือหมดอายุ" }
   }
 }
+
+async function resolveWorkFile(baseDir: string, fileParts: string[]): Promise<string | null> {
+  let filePath = path.join(baseDir, ...fileParts)
+  if (fileParts.length === 0 || (await Bun.file(filePath).exists()) === false) {
+    filePath = path.join(filePath, "index.html")
+  }
+  const file = Bun.file(filePath)
+  if (!(await file.exists())) return null
+  return filePath
+}
+
 new Elysia()
   .use(cors())
   .get("/", () => "Server is running!")
@@ -64,7 +75,7 @@ new Elysia()
     return getDeployStatus(params.name)
   })
   // Admin: Trigger Deploy (clone + build + serve) — ไม่บล็อก request ให้ build ทำงาน background
-  .post("/api/admin/projects/:id/deploy", async ({ headers, set, params }) => {
+  .post("/api/admin/projects/:id/deploy", async ({ headers, set, params, body }) => {
     const result = authCheck({ headers, set })
     if (set.status === 401) return result
     if (result.role !== "admin") {
@@ -81,7 +92,8 @@ new Elysia()
       if (current.state === "building") {
         return { message: "กำลัง Build อยู่ อย่าซ้ำซ้อน", status: current }
       }
-      deployProject(project).catch(() => {})
+      const requestedCommit = (body as { commit?: string } | undefined)?.commit
+      deployProject(project, requestedCommit).catch(() => {})
       const building = getDeployStatus(project.name)
       return { message: "เริ่ม Deploy แล้ว", status: building }
     } catch (err: any) {
@@ -995,7 +1007,7 @@ new Elysia()
     }
     return new Response(file)
   })
-  // เสิร์ฟผล Build ที่ Deploy แล้ว — /work/{project}/*
+  // เสิร์ฟผล Build ที่ Deploy แล้ว — /work/{project}/* หรือ /work/{project}/{commit}/*
   .get("/work/*", async ({ params, request, set }) => {
     const url = new URL(request.url)
     const fullPath = decodeURIComponent(url.pathname.replace(/^\/work\//, ""))
@@ -1005,19 +1017,43 @@ new Elysia()
       return { message: "ไม่พบโปรเจคที่ระบุ" }
     }
     const projectName = slugify(segments[0])
-    const fileParts = segments.slice(1)
-    const baseDir = path.join(WORK_ROOT, projectName)
-    let filePath = path.join(baseDir, ...fileParts)
-    if (fileParts.length === 0 || (await Bun.file(filePath).exists()) === false) {
-      filePath = path.join(filePath, "index.html")
+    const projectRoot = path.join(WORK_ROOT, projectName)
+
+    // กรณี URL เป็น /work/{project}/{commit}/* → พยายามหา build เฉพาะ commit
+    const hasCommitSegment = segments.length >= 2
+    const commitCandidate = hasCommitSegment ? segments[1] : ""
+    const commitDir = hasCommitSegment ? path.join(projectRoot, commitCandidate) : ""
+    const commitBuilt = hasCommitSegment && commitCandidate !== "latest" &&
+      (await Bun.file(path.join(commitDir, "index.html")).exists())
+
+    // commit ที่ขอมี build แยก → เสิร์ฟจากโฟลเดอร์นั้น
+    if (commitBuilt) {
+      const filePath = await resolveWorkFile(commitDir, segments.slice(2))
+      if (!filePath) {
+        set.status = 404
+        return { message: "ไม่พบไฟล์งาน" }
+      }
+      return new Response(Bun.file(filePath))
     }
-    const file = Bun.file(filePath)
-    const exists = await file.exists()
-    if (!exists) {
+
+    // ไม่มี commit หรือ commit ยังไม่มี build แยก → เสิร์ฟ build ล่าสุด (จาก status) หรือโครงสร้าง flat เดิม
+    // fileParts ตัด commit segment ออกไปด้วย (โหลดไฟล์ของ build ล่าสุดมาแสดงแทน)
+    let fileParts = hasCommitSegment ? segments.slice(2) : segments.slice(1)
+    const status = getDeployStatus(projectName)
+    const latestCommit = status?.commit && status.commit !== "latest" ? status.commit : ""
+    const latestDir = latestCommit ? path.join(projectRoot, latestCommit) : ""
+    let baseDir = projectRoot
+
+    if (latestDir && (await Bun.file(path.join(latestDir, "index.html")).exists())) {
+      baseDir = latestDir
+    }
+
+    const filePath = await resolveWorkFile(baseDir, fileParts)
+    if (!filePath) {
       set.status = 404
       return { message: "ไม่พบไฟล์งาน" }
     }
-    return new Response(file)
+    return new Response(Bun.file(filePath))
   })
   .listen({ port: 4000, hostname: "0.0.0.0" })
 console.log("Server running on port 4000 (0.0.0.0)")

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
@@ -121,7 +122,7 @@ export default function CreateAccountPage() {
 							Create account
 						</button>
 						<div className="mt-4 text-center">
-							<a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">มีบัญชีแล้ว? เข้าสู่ระบบ</a>
+							<Link href="/login" className="text-sm font-medium text-indigo-600 hover:underline">มีบัญชีแล้ว? เข้าสู่ระบบ</Link>
 						</div>
 					</div>
 				</div>

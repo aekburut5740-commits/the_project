@@ -166,7 +166,7 @@ export default function GitPage() {
 
   // Compute Active Preview URL based on Selected Project website, direct deploy URL, or Customer Link fallback
   const activePreviewUrl = useMemo(() => {
-    let base = selectedProject?.website || ""
+    const base = selectedProject?.website || ""
 
     if (base && base.startsWith("http") && !base.includes("/dashboard/")) {
       if (selectedCommit) {
@@ -180,7 +180,13 @@ export default function GitPage() {
     if (selectedProject?.name) {
       const name = String(selectedProject.name)
       if (deployStatus?.state === "ready") {
-        return `${API_URL}/work/${encodeURIComponent(name)}/`
+        const hash = selectedCommit?.id ? selectedCommit.id.substring(0, 7) : deployStatus.commit
+        const commitBuilt = hash && Array.isArray(deployStatus.commits)
+          ? deployStatus.commits.includes(hash)
+          : true
+        if (commitBuilt) {
+          return `${API_URL}/work/${encodeURIComponent(name)}/${encodeURIComponent(hash || "latest")}/`
+        }
       }
     }
 
@@ -271,7 +277,7 @@ export default function GitPage() {
     setDeploying(true)
     setDeployStatus((prev: any) => ({ ...(prev || {}), state: "building" }))
     try {
-      await backend.deployProject(Number(selectedProject.id))
+      await backend.deployProject(Number(selectedProject.id), selectedCommit?.id)
       const ds = await backend.guestDeployStatus(String(selectedProject.name))
       setDeployStatus(ds || null)
     } catch (err) {

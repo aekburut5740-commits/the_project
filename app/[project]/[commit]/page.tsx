@@ -9,6 +9,7 @@ import { MessageSquare, Send, X } from "lucide-react"
 export default function ProjectCommitPreviewPage() {
   const params = useParams()
   const projectName = decodeURIComponent((params?.project as string) || "")
+  const requestedCommit = decodeURIComponent((params?.commit as string) || "latest")
 
   const [project, setProject] = useState<any>(null)
   const [deployStatus, setDeployStatus] = useState<any>(null)
@@ -51,15 +52,25 @@ export default function ProjectCommitPreviewPage() {
     if (projectName) loadPreview()
   }, [projectName])
 
-  const workUrl = deployStatus?.state === "ready"
-    ? `${API_URL}/work/${encodeURIComponent(projectName)}/`
+  const isLatest = requestedCommit === "latest"
+  const targetCommit = isLatest ? deployStatus?.commit : requestedCommit
+  const commitIsBuilt = Array.isArray(deployStatus?.commits)
+    ? deployStatus.commits.includes(targetCommit)
+    : false
+
+  // latest → /work/{name}/ (handler resolve commit ล่าสุดเอง, รองรับทั้งแบบเก่า-ใหม่)
+  // เฉพาะ commit → /work/{name}/{commit}/ (ต้องถูก build แล้ว)
+  const workUrl = deployStatus?.state === "ready" && (isLatest || commitIsBuilt)
+    ? `${API_URL}/work/${encodeURIComponent(projectName)}/${isLatest ? "" : encodeURIComponent(targetCommit) + "/"}`
     : null
 
   const websiteUrl = project?.website?.startsWith("http")
     ? project.website
     : null
 
-  const previewUrl = workUrl || websiteUrl
+  const previewUrl = workUrl || (isLatest ? websiteUrl : null)
+
+  const commitNotBuilt = !isLatest && deployStatus?.state === "ready" && !commitIsBuilt
 
   async function handleSubmitFeedback(e: React.FormEvent) {
     e.preventDefault()
@@ -118,11 +129,24 @@ export default function ProjectCommitPreviewPage() {
       <div style={{ minHeight: "100vh", background: "#0f172a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <div style={{ background: "#1e293b", padding: 32, borderRadius: 16, textAlign: "center", maxWidth: 440 }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>🚧</div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>โปรเจคนี้ยังไม่ได้เปิดขึ้น server</h2>
-          <p style={{ fontSize: 14, color: "#94a3b8", margin: 0 }}>
-            งานของ <strong style={{ color: "#f8fafc" }}>{project.name}</strong> ยังอยู่ระหว่างการพัฒนา
-            {deployStatus?.state === "building" ? " — กำลัง Build งานอยู่ กรุณารอสักครู่" : " เมื่อเสร็จแล้วจะสามารถเข้าชมได้จากลิงก์นี้"}
-          </p>
+          {commitNotBuilt ? (
+            <>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>ยังไม่ได้ Build Commit นี้</h2>
+              <p style={{ fontSize: 14, color: "#94a3b8", margin: 0 }}>
+                Commit <strong style={{ color: "#f8fafc" }}>{requestedCommit}</strong> ของ{" "}
+                <strong style={{ color: "#f8fafc" }}>{project.name}</strong> ยังไม่ได้ถูก Build
+                กรุณาเข้าไปกด Deploy commit นี้ในหน้า Git ของ Admin ก่อนเข้าชม
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>โปรเจคนี้ยังไม่ได้เปิดขึ้น server</h2>
+              <p style={{ fontSize: 14, color: "#94a3b8", margin: 0 }}>
+                งานของ <strong style={{ color: "#f8fafc" }}>{project.name}</strong> ยังอยู่ระหว่างการพัฒนา
+                {deployStatus?.state === "building" ? " — กำลัง Build งานอยู่ กรุณารอสักครู่" : " เมื่อเสร็จแล้วจะสามารถเข้าชมได้จากลิงก์นี้"}
+              </p>
+            </>
+          )}
           <button
             onClick={() => {
               setFbError("")

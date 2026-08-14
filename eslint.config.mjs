@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // ละเว้นผล build ของงานที่ deploy (ไม่ใช่ code ระบบ)
+    "backend/workspace/**",
+    "backend/work/**",
   ]),
 ]);
 

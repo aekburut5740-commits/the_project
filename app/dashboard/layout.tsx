@@ -19,11 +19,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
-  if (isIframe) {
-    return <main className="p-4 bg-gray-900 text-white min-h-screen">{children}</main>
-  }
-
   useEffect(() => {
+    if (isIframe) return
     const user = getUser()
   console.log("user:", user)
   if (!user) return
@@ -38,7 +35,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     })
     .catch((err) => console.log("maintenance error:", err))
-  }, [router])
+  }, [router, isIframe])
+
+  if (isIframe) {
+    return <main className="p-4 bg-gray-900 text-white min-h-screen">{children}</main>
+  }
 
   return (
     <ThemeProvider>

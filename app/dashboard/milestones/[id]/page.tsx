@@ -106,12 +106,6 @@ export default function MilestoneDetailPage() {
     const [isEditingMilestone, setIsEditingMilestone] = useState(false)
     const [saving, setSaving] = useState(false)
 
-    useEffect(() => {
-        if (!mounted) return
-        loadData()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mounted, id])
-
     async function loadData() {
         setLoading(true)
         setError("")
@@ -141,6 +135,12 @@ export default function MilestoneDetailPage() {
             setLoading(false)
         }
     }
+
+    useEffect(() => {
+        if (!mounted) return
+        loadData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mounted, id])
 
     // โหลดใหม่เฉพาะ activity log + progress history (ใช้หลังแก้ไข task เพื่อไม่ต้องรีโหลดทั้งหน้า)
     async function refreshSecondary() {

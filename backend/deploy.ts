@@ -12,6 +12,7 @@ export type DeployStatus = {
   projectName: string
   repo?: string
   commit?: string
+  commits?: string[]
   lastBuildAt?: string
   error?: string
   outputDir?: string
@@ -71,7 +72,7 @@ function detectOutputDir(buildScript: string): string {
   return ""
 }
 
-export async function deployProject(project: any): Promise<DeployStatus> {
+export async function deployProject(project: any, commit?: string): Promise<DeployStatus> {
   const name = slugify(project?.name || "project")
   const repo = extractRepo(project)
   const current = getDeployStatus(name)
@@ -101,16 +102,25 @@ export async function deployProject(project: any): Promise<DeployStatus> {
     fs.mkdirSync(path.dirname(cloneDir), { recursive: true })
 
     if (!fs.existsSync(path.join(cloneDir, ".git"))) {
-      await $`git clone --depth 1 ${repoUrl(repo)} ${cloneDir}`.quiet().nothrow()
+      await $`git clone ${repoUrl(repo)} ${cloneDir}`.quiet().nothrow()
     } else {
-      await $`git pull`.cwd(cloneDir).quiet().nothrow()
+      await $`git fetch origin`.cwd(cloneDir).quiet().nothrow()
     }
 
     if (!fs.existsSync(path.join(cloneDir, ".git"))) {
       throw new Error("Clone Repo ไม่สำเร็จ (ตรวจ URL หรือสิทธิ์การเข้าถึง)")
     }
 
-    const commit = (await $`git rev-parse --short HEAD`.cwd(cloneDir).quiet().nothrow().text()).trim() || "latest"
+    if (commit && commit !== "latest") {
+      // ต้องมี full history เพื่อจะ checkout commit เก่าได้ (repo เก่าที่ clone แบบ --depth 1 ต้อง unshallow)
+      await $`git fetch --unshallow origin`.cwd(cloneDir).quiet().nothrow()
+      await $`git checkout -f ${commit}`.cwd(cloneDir).quiet().nothrow()
+    } else {
+      // ไม่ระบุ commit → ให้อยู่ที่ HEAD ล่าสุดของ remote เสมอ (กันค้างที่ commit เก่าจากรอบก่อน)
+      await $`git checkout -f origin/HEAD`.cwd(cloneDir).quiet().nothrow()
+    }
+
+    const resolvedCommit = (await $`git rev-parse --short HEAD`.cwd(cloneDir).quiet().nothrow().text()).trim() || "latest"
 
     const pkgPath = path.join(cloneDir, "package.json")
     let outputSubDir = ""
@@ -123,7 +133,7 @@ export async function deployProject(project: any): Promise<DeployStatus> {
       }
       if (buildScript) {
         const buildArgs = buildScript.includes("next build") ? ["--", "--no-lint"] : []
-        const buildEnv = buildScript.includes("next build") ? { NEXT_PUBLIC_BASE_PATH: `/work/${name}` } : {}
+        const buildEnv = buildScript.includes("next build") ? { NEXT_PUBLIC_BASE_PATH: `/work/${name}/${resolvedCommit}` } : {}
         const buildResult = await $`npm run build ${buildArgs}`.cwd(cloneDir).env(buildEnv).quiet().nothrow()
         if (buildResult.exitCode !== 0) {
           throw new Error("Build งานไม่สำเร็จ (npm run build) — ดู error ในเทอร์มินัล")
@@ -137,16 +147,23 @@ export async function deployProject(project: any): Promise<DeployStatus> {
       throw new Error(`ไม่พบผล build ในโฟลเดอร์ "${outputSubDir || "."}"`)
     }
 
-    const target = path.join(WORK_ROOT, name)
+    const target = path.join(WORK_ROOT, name, resolvedCommit)
     fs.rmSync(target, { recursive: true, force: true })
     fs.mkdirSync(path.dirname(target), { recursive: true })
     fs.cpSync(srcDir, target, { recursive: true })
+
+    const previous = getDeployStatus(name)
+    const builtCommits = Array.isArray(previous?.commits) ? previous.commits : []
+    if (!builtCommits.includes(resolvedCommit)) {
+      builtCommits.push(resolvedCommit)
+    }
 
     const ready: DeployStatus = {
       state: "ready",
       projectName: name,
       repo,
-      commit,
+      commit: resolvedCommit,
+      commits: builtCommits,
       lastBuildAt: new Date().toISOString(),
       outputDir: target,
     }
