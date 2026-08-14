@@ -148,14 +148,7 @@ export async function getProjectById(projectId: number) {
   return result.rows[0] || null
 }
 
-// Admin: อัปเดตสถานะโปรเจค
-export async function getProjectById(id: number) {
-  const result = await db.query(
-    `SELECT * FROM projects WHERE id = $1 LIMIT 1`,
-    [id]
-  )
-  return result.rows[0]
-}
+
 
 export async function updateProjectStatus(id: number, status: string) {
   const result = await db.query(
